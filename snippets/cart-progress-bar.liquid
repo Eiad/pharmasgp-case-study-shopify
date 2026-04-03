@@ -123,6 +123,7 @@
       var WRAPPER_SEL = '.cart-progress-wrapper';
       var debounceTimer;
       var isUpdating = false;
+      var isOwnCartCall = false; // flag to skip intercepting our own calls
 
       function getConfig() {
         var el = document.querySelector(WRAPPER_SEL);
@@ -148,29 +149,53 @@
         return res.json();
       }
 
-      async function addGift(variantId) {
-        var res = await fetch('/cart/add.js', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [{ id: parseInt(variantId, 10), quantity: 1 }] })
-        });
-        if (res.status === 429) {
-          await new Promise(function(r) { setTimeout(r, 1000); });
-          return addGift(variantId);
+      async function cartApiCall(url, body) {
+        isOwnCartCall = true;
+        try {
+          var res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (res.status === 429) {
+            await new Promise(function(r) { setTimeout(r, 1000); });
+            return cartApiCall(url, body);
+          }
+          return res;
+        } finally {
+          isOwnCartCall = false;
         }
-        if (!res.ok) console.warn('Cart progress: could not add gift product');
+      }
+
+      async function addGift(variantId) {
+        var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(variantId, 10), quantity: 1 }] });
+        if (!res || !res.ok) console.warn('Cart progress: could not add gift product');
       }
 
       async function removeGift(lineIndex) {
-        var res = await fetch('/cart/change.js', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line: lineIndex, quantity: 0 })
+        await cartApiCall('/cart/change.js', { line: lineIndex, quantity: 0 });
+      }
+
+      // Force Horizon to re-render cart sections after our gift operations
+      function refreshCartSections() {
+        var components = document.querySelectorAll('cart-items-component');
+        components.forEach(function(comp) {
+          var sectionId = comp.dataset.sectionId;
+          if (sectionId) {
+            fetch('/?sections=' + sectionId)
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (data[sectionId]) {
+                  var parser = new DOMParser();
+                  var doc = parser.parseFromString(data[sectionId], 'text/html');
+                  var newContent = doc.querySelector('cart-items-component');
+                  if (newContent && comp.parentNode) {
+                    comp.innerHTML = newContent.innerHTML;
+                  }
+                }
+              });
+          }
         });
-        if (res.status === 429) {
-          await new Promise(function(r) { setTimeout(r, 1000); });
-          return removeGift(lineIndex);
-        }
       }
 
       function updateUI(config, total) {
@@ -232,36 +257,38 @@
             return String(item.variant_id) === String(config.giftVariant);
           });
 
+          var cartChanged = false;
+
           if (total >= config.gift && !hasGift) {
             await addGift(config.giftVariant);
-            isUpdating = false;
-            return update();
+            cartChanged = true;
           }
-          // Enforce gift qty = 1 (user might have changed it)
-          if (total >= config.gift && hasGift) {
+          // Enforce gift qty = 1
+          if (!cartChanged && total >= config.gift && hasGift) {
             var giftItem = cart.items.find(function(item) {
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (giftItem && giftItem.quantity > 1) {
               var giftLine = cart.items.indexOf(giftItem) + 1;
-              await fetch('/cart/change.js', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ line: giftLine, quantity: 1 })
-              });
-              isUpdating = false;
-              return update();
+              await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
+              cartChanged = true;
             }
           }
-          if (total < config.gift && hasGift) {
+          if (!cartChanged && total < config.gift && hasGift) {
             var idx = cart.items.findIndex(function(item) {
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (idx !== -1) {
               await removeGift(idx + 1);
-              isUpdating = false;
-              return update(); // re-check after remove
+              cartChanged = true;
             }
+          }
+
+          if (cartChanged) {
+            // Refresh the cart drawer/page sections to show the gift change
+            refreshCartSections();
+            isUpdating = false;
+            return;
           }
 
           // Update UI after gift operations (Liquid/morph handles normal quantity changes)
@@ -284,7 +311,7 @@
         var args = arguments;
         var url = typeof args[0] === 'string' ? args[0] : '';
         return originalFetch.apply(this, args).then(function(response) {
-          if (url.indexOf('/cart/') !== -1 && url.indexOf('/cart.json') === -1) {
+          if (!isOwnCartCall && url.indexOf('/cart/') !== -1 && url.indexOf('/cart.json') === -1) {
             scheduleUpdate();
           }
           return response;
