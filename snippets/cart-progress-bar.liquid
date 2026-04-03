@@ -191,25 +191,38 @@
       }
 
       // Force Horizon to re-render cart sections after our gift operations
-      function refreshCartSections() {
+      async function refreshCartSections() {
         var components = document.querySelectorAll('cart-items-component');
+        var sectionIds = [];
         components.forEach(function(comp) {
-          var sectionId = comp.dataset.sectionId;
-          if (sectionId) {
-            fetch('/?sections=' + sectionId)
-              .then(function(r) { return r.json(); })
-              .then(function(data) {
-                if (data[sectionId]) {
-                  var parser = new DOMParser();
-                  var doc = parser.parseFromString(data[sectionId], 'text/html');
-                  var newContent = doc.querySelector('cart-items-component');
-                  if (newContent && comp.parentNode) {
-                    comp.innerHTML = newContent.innerHTML;
-                  }
-                }
-              });
-          }
+          if (comp.dataset.sectionId) sectionIds.push(comp.dataset.sectionId);
         });
+        if (sectionIds.length === 0) return;
+
+        try {
+          var res = await fetch('/?sections=' + sectionIds.join(','));
+          var data = await res.json();
+
+          components.forEach(function(comp) {
+            var id = comp.dataset.sectionId;
+            if (data[id]) {
+              var parser = new DOMParser();
+              var doc = parser.parseFromString(data[id], 'text/html');
+              var newContent = doc.querySelector('cart-items-component');
+              if (newContent) {
+                comp.innerHTML = newContent.innerHTML;
+              }
+            }
+          });
+
+          // Also update cart bubble count in header
+          var bubbles = document.querySelectorAll('.cart-bubble, [data-cart-count]');
+          var cartData = await getCart();
+          bubbles.forEach(function(b) { b.textContent = cartData.item_count; });
+        } catch(e) {
+          // Fallback: just reload if section refresh fails
+          window.location.reload();
+        }
       }
 
       function updateUI(config, total) {
@@ -304,7 +317,7 @@
 
           if (cartChanged) {
             // Refresh the cart drawer/page sections to show the gift change
-            refreshCartSections();
+            await refreshCartSections();
             isUpdating = false;
             return;
           }
@@ -320,7 +333,7 @@
 
       function scheduleUpdate() {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(update, 300);
+        debounceTimer = setTimeout(update, 100);
       }
 
       // Detect cart changes: intercept fetch to /cart/ endpoints
