@@ -1,0 +1,289 @@
+{%- comment -%}
+  Cart Progress Bar — Free shipping + free gift incentive
+  Rendered in both the cart drawer and cart page.
+  Settings configured in Theme Editor > Settings > Cart Progress Bar.
+{%- endcomment -%}
+
+{%- liquid
+  assign shipping_limit = settings.cart_progress_shipping_threshold | plus: 0 | times: 100 | round
+  assign gift_limit = settings.cart_progress_gift_threshold | plus: 0 | times: 100 | round
+  assign gift_variant_id = settings.cart_progress_gift_variant_id
+  assign cart_total = cart.items_subtotal_price
+
+  if cart_total >= gift_limit
+    assign progress = 100
+    assign status_text = 'You got free shipping & a free gift!'
+    assign helper_text = ''
+    assign bar_state = 'complete'
+  elsif cart_total >= shipping_limit
+    assign gift_range = gift_limit | minus: shipping_limit
+    assign gift_progress = cart_total | minus: shipping_limit | times: 50 | divided_by: gift_range
+    assign progress = 50 | plus: gift_progress
+    assign remaining_cents = gift_limit | minus: cart_total
+    assign remaining_formatted = remaining_cents | money
+    assign gift_limit_formatted = gift_limit | money
+    assign status_text = 'Free gift at ' | append: gift_limit_formatted
+    assign helper_text = 'Just ' | append: remaining_formatted | append: ' away from a free gift!'
+    assign bar_state = 'active'
+  else
+    assign progress = cart_total | times: 50 | divided_by: shipping_limit
+    assign remaining_cents = shipping_limit | minus: cart_total
+    assign remaining_formatted = remaining_cents | money
+    assign shipping_limit_formatted = shipping_limit | money
+    assign status_text = 'Free shipping at ' | append: shipping_limit_formatted
+    assign helper_text = 'Just ' | append: remaining_formatted | append: ' away from free shipping!'
+    assign bar_state = 'active'
+  endif
+-%}
+
+{%- comment -%} Stable wrapper for morphdom — always present even when cart empty {%- endcomment -%}
+<div class="cart-progress-wrapper"
+     data-hydration-key="cart-progress"
+     data-shipping-threshold="{{ shipping_limit }}"
+     data-gift-threshold="{{ gift_limit }}"
+     data-gift-variant-id="{{ gift_variant_id }}"
+     data-money-format="{{ shop.money_format }}">
+
+  {%- if cart.item_count > 0 -%}
+    <div class="cart-progress"
+         role="progressbar"
+         aria-valuenow="{{ progress }}"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-label="{{ status_text }}">
+
+      <p class="cart-progress__status{% if bar_state == 'complete' %} cart-progress__status--success{% endif %}">
+        {{ status_text }}
+      </p>
+
+      <div class="cart-progress__track">
+        <div class="cart-progress__fill{% if bar_state == 'complete' %} cart-progress__fill--complete{% endif %}"
+             style="width: {{ progress | at_most: 100 }}%">
+        </div>
+      </div>
+
+      {%- if helper_text != blank -%}
+        <p class="cart-progress__helper">{{ helper_text }}</p>
+      {%- endif -%}
+    </div>
+  {%- endif -%}
+</div>
+
+<style>
+  .cart-progress {
+    background: #F0F4F6;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 0 0 16px;
+    transition: background 0.4s ease;
+  }
+  .cart-progress.is-complete { background: #e8f5e0; }
+
+  .cart-progress__status {
+    font-size: 14px;
+    font-weight: 500;
+    color: #002F6C;
+    margin: 0 0 10px;
+    transition: color 0.4s ease;
+  }
+  .cart-progress__status--success { color: #4A9500; }
+
+  .cart-progress__track {
+    height: 7px;
+    background: #d0d8de;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .cart-progress__fill {
+    height: 100%;
+    background: #002F6C;
+    border-radius: 4px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .cart-progress__fill--complete { background: #4A9500; }
+
+  .cart-progress__helper {
+    font-size: 12px;
+    color: #48494B;
+    margin: 8px 0 0;
+  }
+
+  /* In production, use theme CSS variables for color scheme adaptability:
+     --color-foreground, --color-background, --color-success, etc. */
+</style>
+
+<script>
+  // Guard: only set up once even if snippet renders in multiple contexts
+  if (!window.__cartProgressInit) {
+    window.__cartProgressInit = true;
+
+    (function() {
+      var WRAPPER_SEL = '.cart-progress-wrapper';
+      var debounceTimer;
+      var isUpdating = false;
+
+      function getConfig() {
+        var el = document.querySelector(WRAPPER_SEL);
+        if (!el) return null;
+        return {
+          el: el,
+          shipping: parseInt(el.dataset.shippingThreshold, 10),
+          gift: parseInt(el.dataset.giftThreshold, 10),
+          giftVariant: el.dataset.giftVariantId,
+          moneyFormat: el.dataset.moneyFormat || '${{amount}}'
+        };
+      }
+
+      // Format cents using the store's money format
+      // In production, use: import { formatMoney } from '@theme/money-formatting'
+      function formatMoney(cents, format) {
+        var amount = (cents / 100).toFixed(2);
+        return format.replace('{{amount}}', amount).replace('{{amount_with_comma_separator}}', amount.replace('.', ','));
+      }
+
+      async function getCart() {
+        var res = await fetch('/cart.json');
+        if (!res.ok) throw new Error('Cart fetch failed');
+        return res.json();
+      }
+
+      async function addGift(variantId) {
+        var res = await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [{ id: parseInt(variantId, 10), quantity: 1 }] })
+        });
+        if (res.status === 429) {
+          await new Promise(function(r) { setTimeout(r, 1000); });
+          return addGift(variantId);
+        }
+        if (!res.ok) console.warn('Cart progress: could not add gift product');
+      }
+
+      async function removeGift(lineIndex) {
+        var res = await fetch('/cart/change.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ line: lineIndex, quantity: 0 })
+        });
+        if (res.status === 429) {
+          await new Promise(function(r) { setTimeout(r, 1000); });
+          return removeGift(lineIndex);
+        }
+      }
+
+      function updateUI(config, total) {
+        var bar = config.el.querySelector('.cart-progress');
+        if (!bar) return;
+
+        var progress, statusText, helperText, isComplete;
+        var fmt = config.moneyFormat;
+
+        if (total >= config.gift) {
+          progress = 100;
+          statusText = 'You got free shipping & a free gift!';
+          helperText = '';
+          isComplete = true;
+        } else if (total >= config.shipping) {
+          progress = 50 + ((total - config.shipping) / (config.gift - config.shipping)) * 50;
+          statusText = 'Free gift at ' + formatMoney(config.gift, fmt);
+          helperText = 'Just ' + formatMoney(config.gift - total, fmt) + ' away from a free gift!';
+          isComplete = false;
+        } else {
+          progress = (total / config.shipping) * 50;
+          statusText = 'Free shipping at ' + formatMoney(config.shipping, fmt);
+          helperText = 'Just ' + formatMoney(config.shipping - total, fmt) + ' away from free shipping!';
+          isComplete = false;
+        }
+
+        var fill = bar.querySelector('.cart-progress__fill');
+        var status = bar.querySelector('.cart-progress__status');
+        var helper = bar.querySelector('.cart-progress__helper');
+
+        if (fill) {
+          fill.style.width = Math.min(progress, 100) + '%';
+          fill.classList.toggle('cart-progress__fill--complete', isComplete);
+        }
+        if (status) {
+          status.textContent = statusText;
+          status.classList.toggle('cart-progress__status--success', isComplete);
+        }
+        if (helper) {
+          helper.textContent = helperText;
+          helper.style.display = helperText ? '' : 'none';
+        }
+        bar.classList.toggle('is-complete', isComplete);
+        bar.setAttribute('aria-valuenow', Math.round(progress));
+        bar.setAttribute('aria-label', statusText);
+      }
+
+      // Main: check gift logic and update bar after gift changes
+      async function update() {
+        if (isUpdating) return;
+        isUpdating = true;
+        try {
+          var config = getConfig();
+          if (!config || !config.giftVariant) { isUpdating = false; return; }
+
+          var cart = await getCart();
+          var total = cart.items_subtotal_price;
+          var hasGift = cart.items.some(function(item) {
+            return String(item.variant_id) === String(config.giftVariant);
+          });
+
+          if (total >= config.gift && !hasGift) {
+            await addGift(config.giftVariant);
+            isUpdating = false;
+            return update(); // re-check after add
+          }
+          if (total < config.gift && hasGift) {
+            var idx = cart.items.findIndex(function(item) {
+              return String(item.variant_id) === String(config.giftVariant);
+            });
+            if (idx !== -1) {
+              await removeGift(idx + 1);
+              isUpdating = false;
+              return update(); // re-check after remove
+            }
+          }
+
+          // Update UI after gift operations (Liquid/morph handles normal quantity changes)
+          updateUI(config, total);
+        } catch (e) {
+          console.error('Cart progress bar:', e);
+        } finally {
+          isUpdating = false;
+        }
+      }
+
+      function scheduleUpdate() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(update, 300);
+      }
+
+      // Detect cart changes: intercept fetch to /cart/ endpoints
+      var originalFetch = window.fetch;
+      window.fetch = function() {
+        var args = arguments;
+        var url = typeof args[0] === 'string' ? args[0] : '';
+        return originalFetch.apply(this, args).then(function(response) {
+          if (url.indexOf('/cart/') !== -1 && url.indexOf('/cart.json') === -1) {
+            scheduleUpdate();
+          }
+          return response;
+        });
+      };
+
+      // Also listen for Horizon theme's cart update event
+      document.addEventListener('cart:update', scheduleUpdate);
+
+      // Run on page load for gift management
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', update);
+      } else {
+        update();
+      }
+    })();
+  }
+</script>

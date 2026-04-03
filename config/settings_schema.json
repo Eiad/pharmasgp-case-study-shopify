@@ -2284,5 +2284,31 @@
         "default": "equal-width-buttons"
       }
     ]
+  },
+  {
+    "name": "Cart Progress Bar",
+    "settings": [
+      {
+        "type": "text",
+        "id": "cart_progress_shipping_threshold",
+        "label": "Free Shipping Limit ($)",
+        "default": "39.99",
+        "info": "How much the customer needs to spend for free shipping"
+      },
+      {
+        "type": "text",
+        "id": "cart_progress_gift_threshold",
+        "label": "Free Gift Limit ($)",
+        "default": "99.99",
+        "info": "How much the customer needs to spend to get a free gift"
+      },
+      {
+        "type": "text",
+        "id": "cart_progress_gift_variant_id",
+        "label": "Gift Product Variant ID",
+        "default": "43379474432059",
+        "info": "The ID of the free gift product (Shopify Admin > Products > Variants)"
+      }
+    ]
   }
 ]

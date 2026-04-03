@@ -8,14 +8,6 @@
  * ------------------------------------------------------------
  */{
   "sections": {
-    "cart-progress": {
-      "type": "cart-progress-bar",
-      "settings": {
-        "free_shipping_threshold": "39.99",
-        "free_gift_threshold": "99.99",
-        "free_gift_variant_id": "43379474432059"
-      }
-    },
     "cart-section": {
       "type": "main-cart",
       "blocks": {
@@ -267,7 +259,6 @@
     }
   },
   "order": [
-    "cart-progress",
     "cart-section",
     "product_list_NNFgcy"
   ]
