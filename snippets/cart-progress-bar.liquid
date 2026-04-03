@@ -110,6 +110,20 @@
     margin: 8px 0 0;
   }
 
+  /* Loading shimmer while gift is being added/removed */
+  .cart-progress--loading .cart-progress__fill {
+    animation: shimmer 1.2s ease-in-out infinite;
+  }
+  .cart-progress--loading .cart-progress__status,
+  .cart-progress--loading .cart-progress__helper {
+    opacity: 0.5;
+  }
+  @keyframes shimmer {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+
   /* In production, use theme CSS variables for color scheme adaptability:
      --color-foreground, --color-background, --color-success, etc. */
 </style>
@@ -258,8 +272,10 @@
           });
 
           var cartChanged = false;
+          var bar = config.el.querySelector('.cart-progress');
 
           if (total >= config.gift && !hasGift) {
+            if (bar) bar.classList.add('cart-progress--loading');
             await addGift(config.giftVariant);
             cartChanged = true;
           }
@@ -269,6 +285,7 @@
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (giftItem && giftItem.quantity > 1) {
+              if (bar) bar.classList.add('cart-progress--loading');
               var giftLine = cart.items.indexOf(giftItem) + 1;
               await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
               cartChanged = true;
@@ -279,6 +296,7 @@
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (idx !== -1) {
+              if (bar) bar.classList.add('cart-progress--loading');
               await removeGift(idx + 1);
               cartChanged = true;
             }
