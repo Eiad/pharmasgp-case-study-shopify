@@ -42,7 +42,8 @@
      data-shipping-threshold="{{ shipping_limit }}"
      data-gift-threshold="{{ gift_limit }}"
      data-gift-variant-id="{{ gift_variant_id }}"
-     data-money-format="{{ shop.money_format }}">
+     data-currency-symbol="{{ cart.currency.symbol }}"
+     data-currency-code="{{ cart.currency.iso_code }}">
 
   {%- if cart.item_count > 0 -%}
     <div class="cart-progress"
@@ -131,15 +132,14 @@
           shipping: parseInt(el.dataset.shippingThreshold, 10),
           gift: parseInt(el.dataset.giftThreshold, 10),
           giftVariant: el.dataset.giftVariantId,
-          moneyFormat: el.dataset.moneyFormat || '${{amount}}'
+          currencySymbol: el.dataset.currencySymbol || '$'
         };
       }
 
-      // Format cents using the store's money format
+      // Format cents to display price
       // In production, use: import { formatMoney } from '@theme/money-formatting'
-      function formatMoney(cents, format) {
-        var amount = (cents / 100).toFixed(2);
-        return format.replace('{{amount}}', amount).replace('{{amount_with_comma_separator}}', amount.replace('.', ','));
+      function formatMoney(cents, symbol) {
+        return symbol + (cents / 100).toFixed(2);
       }
 
       async function getCart() {
@@ -178,7 +178,7 @@
         if (!bar) return;
 
         var progress, statusText, helperText, isComplete;
-        var fmt = config.moneyFormat;
+        var sym = config.currencySymbol;
 
         if (total >= config.gift) {
           progress = 100;
@@ -187,13 +187,13 @@
           isComplete = true;
         } else if (total >= config.shipping) {
           progress = 50 + ((total - config.shipping) / (config.gift - config.shipping)) * 50;
-          statusText = 'Free gift at ' + formatMoney(config.gift, fmt);
-          helperText = 'Just ' + formatMoney(config.gift - total, fmt) + ' away from a free gift!';
+          statusText = 'Free gift at ' + formatMoney(config.gift, sym);
+          helperText = 'Just ' + formatMoney(config.gift - total, sym) + ' away from a free gift!';
           isComplete = false;
         } else {
           progress = (total / config.shipping) * 50;
-          statusText = 'Free shipping at ' + formatMoney(config.shipping, fmt);
-          helperText = 'Just ' + formatMoney(config.shipping - total, fmt) + ' away from free shipping!';
+          statusText = 'Free shipping at ' + formatMoney(config.shipping, sym);
+          helperText = 'Just ' + formatMoney(config.shipping - total, sym) + ' away from free shipping!';
           isComplete = false;
         }
 
@@ -235,7 +235,23 @@
           if (total >= config.gift && !hasGift) {
             await addGift(config.giftVariant);
             isUpdating = false;
-            return update(); // re-check after add
+            return update();
+          }
+          // Enforce gift qty = 1 (user might have changed it)
+          if (total >= config.gift && hasGift) {
+            var giftItem = cart.items.find(function(item) {
+              return String(item.variant_id) === String(config.giftVariant);
+            });
+            if (giftItem && giftItem.quantity > 1) {
+              var giftLine = cart.items.indexOf(giftItem) + 1;
+              await fetch('/cart/change.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ line: giftLine, quantity: 1 })
+              });
+              isUpdating = false;
+              return update();
+            }
           }
           if (total < config.gift && hasGift) {
             var idx = cart.items.findIndex(function(item) {
