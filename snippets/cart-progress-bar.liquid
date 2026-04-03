@@ -190,39 +190,9 @@
         await cartApiCall('/cart/change.js', { line: lineIndex, quantity: 0 });
       }
 
-      // Force Horizon to re-render cart sections after our gift operations
-      async function refreshCartSections() {
-        var components = document.querySelectorAll('cart-items-component');
-        var sectionIds = [];
-        components.forEach(function(comp) {
-          if (comp.dataset.sectionId) sectionIds.push(comp.dataset.sectionId);
-        });
-        if (sectionIds.length === 0) return;
-
-        try {
-          var res = await fetch('/?sections=' + sectionIds.join(','));
-          var data = await res.json();
-
-          components.forEach(function(comp) {
-            var id = comp.dataset.sectionId;
-            if (data[id]) {
-              var parser = new DOMParser();
-              var doc = parser.parseFromString(data[id], 'text/html');
-              var newContent = doc.querySelector('cart-items-component');
-              if (newContent) {
-                comp.innerHTML = newContent.innerHTML;
-              }
-            }
-          });
-
-          // Also update cart bubble count in header
-          var bubbles = document.querySelectorAll('.cart-bubble, [data-cart-count]');
-          var cartData = await getCart();
-          bubbles.forEach(function(b) { b.textContent = cartData.item_count; });
-        } catch(e) {
-          // Fallback: just reload if section refresh fails
-          window.location.reload();
-        }
+      // After gift add/remove, reload the page to let Horizon re-render properly
+      function refreshCart() {
+        window.location.reload();
       }
 
       function updateUI(config, total) {
@@ -316,9 +286,7 @@
           }
 
           if (cartChanged) {
-            // Refresh the cart drawer/page sections to show the gift change
-            await refreshCartSections();
-            isUpdating = false;
+            refreshCart();
             return;
           }
 
