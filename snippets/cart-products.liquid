@@ -400,37 +400,25 @@
     pointer-events: none;
   }
 
-  /* Gift item styling */
+  /* Gift item styling - clean, minimal, elegant */
   .cart-items__gift-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    background: #e8f5e0;
-    color: #4A9500;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 5px;
-    margin: 4px 0 0;
-    letter-spacing: 0.01em;
+    gap: 5px;
+    background: linear-gradient(135deg, #f0faf0, #e8f5e0);
+    color: #3d8c00;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin: 5px 0 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid rgba(74, 149, 0, 0.12);
   }
   .cart-items__gift-badge::before {
     content: '🎁';
-    font-size: 0.75rem;
-  }
-
-  .cart-items__table-row--gift > td {
-    background: rgba(74, 149, 0, 0.05);
-    position: relative;
-  }
-  .cart-items__table-row--gift > td:first-child {
-    border-left: 3px solid #4A9500;
-    border-radius: 8px 0 0 8px;
-    padding-left: 12px;
-  }
-  .cart-items__table-row--gift > td:last-child {
-    border-radius: 0 8px 8px 0;
-    padding-right: 12px;
+    font-size: 0.65rem;
   }
 
   .cart-items__table-row--gift .cart-items__quantity-controls {
@@ -441,11 +429,6 @@
   .cart-items__table-row--gift .cart-items__price text-component {
     color: #4A9500;
     font-weight: 600;
-  }
-
-  /* Soften gift product image slightly */
-  .cart-items__table-row--gift .cart-items__media img {
-    opacity: 0.88;
   }
 
   .cart-page--empty .cart-items__wrapper {
