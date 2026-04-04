@@ -48,7 +48,27 @@
         <span class="cs-state__desc">Both rewards unlocked + gift auto-added</span>
       </div>
     </div>
-    <a href="/products/kijimea-k53-advance" class="cs-cta">Add Kijimea K53 to Cart →</a>
+    <button type="button" class="cs-cta" id="cs-add-to-cart">Add Kijimea K53 to Cart →</button>
+    <script>
+      document.getElementById('cs-add-to-cart').addEventListener('click', function() {
+        var btn = this;
+        btn.textContent = 'Adding...';
+        btn.disabled = true;
+        fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [{ id: 43379473743931, quantity: 1 }] })
+        }).then(function() {
+          btn.textContent = 'Added! Open cart to see →';
+          btn.style.background = '#4A9500';
+          setTimeout(function() {
+            btn.textContent = 'Add Kijimea K53 to Cart →';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 3000);
+        });
+      });
+    </script>
   </div>
 
   <!-- HOW IT WORKS -->
