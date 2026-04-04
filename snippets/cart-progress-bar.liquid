@@ -252,11 +252,13 @@
 
       // Fetch fresh section HTML and update drawer/page
       async function refreshDrawer() {
+        console.log('[CP] refreshDrawer() called');
         try {
           var comps = document.querySelectorAll('cart-items-component');
           var sectionIds = [];
           comps.forEach(function(c) { if (c.dataset.sectionId) sectionIds.push(c.dataset.sectionId); });
-          if (sectionIds.length === 0) return;
+          console.log('[CP] section IDs:', sectionIds);
+          if (sectionIds.length === 0) { console.log('[CP] NO section IDs found!'); return; }
 
           // Small delay to let Shopify process discount
           await new Promise(function(r) { setTimeout(r, 300); });
@@ -337,30 +339,41 @@
       }
 
       async function update() {
+        console.log('[CP] update() called, isUpdating:', isUpdating);
         if (isUpdating) return;
         isUpdating = true;
         try {
           var config = getConfig();
+          console.log('[CP] config:', config ? { shipping: config.shipping, gift: config.gift, variant: config.giftVariant } : 'NULL');
           if (!config || !config.giftVariant) { isUpdating = false; return; }
 
           var cart = await getCart();
+          console.log('[CP] cart items:', cart.items.length, 'subtotal:', cart.items_subtotal_price);
           // Calculate subtotal EXCLUDING gift to prevent circular dependency
           var total = cart.items.reduce(function(sum, item) {
             var isGift = (item.properties && item.properties._gift === 'true') ||
                          String(item.variant_id) === String(config.giftVariant);
+            if (isGift) console.log('[CP] excluding gift item from total:', item.title, item.final_line_price);
             return isGift ? sum : sum + item.final_line_price;
           }, 0);
           var hasGift = cart.items.some(function(item) {
             return String(item.variant_id) === String(config.giftVariant);
           });
+          console.log('[CP] total (excl gift):', total, 'hasGift:', hasGift, 'threshold:', config.gift);
 
           var cartChanged = false;
 
           // GIFT ADD: show overlay immediately, add gift, morph result
           if (total >= config.gift && !hasGift) {
+            console.log('[CP] ADDING GIFT...');
             showCartLoading();
             var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
-            if (res && res.ok) await refreshDrawer();
+            console.log('[CP] add response ok:', res && res.ok);
+            if (res && res.ok) {
+              console.log('[CP] refreshing drawer...');
+              await refreshDrawer();
+              console.log('[CP] drawer refreshed');
+            }
             hideCartLoading();
             cartChanged = true;
           }
@@ -407,6 +420,7 @@
       }
 
       function scheduleUpdate() {
+        console.log('[CP] scheduleUpdate() called');
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(update, 100);
       }
