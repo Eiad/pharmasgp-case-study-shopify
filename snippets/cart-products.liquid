@@ -179,7 +179,7 @@
                       </a>
                     </p>
                     {% if item.properties['_gift'] == 'true' %}
-                      <p class="cart-items__gift-badge">Gift</p>
+                      <p class="cart-items__gift-badge">Free Gift</p>
                     {% endif %}
                     {% if item.product.vendor and block_settings.vendor %}
                       <p>
@@ -400,28 +400,15 @@
     pointer-events: none;
   }
 
-  /* Gift item - thin green border card, connected to parent product */
-  .cart-items__table-row--gift > td {
-    border-top: 1px solid #4A9500;
-    border-bottom: 1px solid #4A9500;
-    padding-top: 10px;
-    padding-bottom: 10px;
-  }
-  .cart-items__table-row--gift > td:first-child {
-    border-left: 1px solid #4A9500;
-    border-radius: 6px 0 0 6px;
-  }
-  .cart-items__table-row--gift > td:last-child {
-    border-right: 1px solid #4A9500;
-    border-radius: 0 6px 6px 0;
-  }
-
-  /* Simple text label, no heavy badge */
+  /* Gift item - matching the case study demo design */
   .cart-items__gift-badge {
+    display: inline-block;
+    background: #e8f5e0;
     color: #4A9500;
-    font-size: 0.78rem;
-    font-weight: 500;
-    font-style: italic;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
     margin: 3px 0 0;
   }
 
@@ -429,7 +416,6 @@
     display: none;
   }
 
-  /* Gift price in green */
   .cart-items__table-row--gift .cart-items__price text-component {
     color: #4A9500;
   }

@@ -422,9 +422,14 @@
         reorderGiftItems();
       }
 
-      // Also reorder after Horizon's own morph updates
+      // Reorder after Horizon's own morph updates
       document.addEventListener('cart:update', function() {
         setTimeout(reorderGiftItems, 200);
+      });
+
+      // Reorder when cart drawer opens (catches page-refresh case)
+      document.addEventListener('click', function() {
+        setTimeout(reorderGiftItems, 300);
       });
     })();
   }
