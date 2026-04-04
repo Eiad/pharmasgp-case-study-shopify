@@ -179,7 +179,7 @@
                       </a>
                     </p>
                     {% if item.properties['_gift'] == 'true' %}
-                      <p class="cart-items__gift-badge">Free Gift</p>
+                      <p class="cart-items__gift-badge">Gift</p>
                     {% endif %}
                     {% if item.product.vendor and block_settings.vendor %}
                       <p>
@@ -400,25 +400,29 @@
     pointer-events: none;
   }
 
-  /* Gift item styling - clean, minimal, elegant */
-  .cart-items__gift-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: linear-gradient(135deg, #f0faf0, #e8f5e0);
-    color: #3d8c00;
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 20px;
-    margin: 5px 0 0;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    border: 1px solid rgba(74, 149, 0, 0.12);
+  /* Gift item - thin green border card, connected to parent product */
+  .cart-items__table-row--gift > td {
+    border-top: 1px solid #4A9500;
+    border-bottom: 1px solid #4A9500;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
-  .cart-items__gift-badge::before {
-    content: '🎁';
-    font-size: 0.65rem;
+  .cart-items__table-row--gift > td:first-child {
+    border-left: 1px solid #4A9500;
+    border-radius: 6px 0 0 6px;
+  }
+  .cart-items__table-row--gift > td:last-child {
+    border-right: 1px solid #4A9500;
+    border-radius: 0 6px 6px 0;
+  }
+
+  /* Simple text label, no heavy badge */
+  .cart-items__gift-badge {
+    color: #4A9500;
+    font-size: 0.78rem;
+    font-weight: 500;
+    font-style: italic;
+    margin: 3px 0 0;
   }
 
   .cart-items__table-row--gift .cart-items__quantity-controls {
@@ -428,7 +432,6 @@
   /* Gift price in green */
   .cart-items__table-row--gift .cart-items__price text-component {
     color: #4A9500;
-    font-weight: 600;
   }
 
   .cart-page--empty .cart-items__wrapper {
