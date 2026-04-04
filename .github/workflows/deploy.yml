@@ -37,8 +37,10 @@ jobs:
           --store ${{ secrets.SHOPIFY_FLAG_STORE }}
           --theme ${{ secrets.SHOPIFY_THEME_ID }}
           --ignore config/settings_data.json
+          --allow-live
           --json
+          --password ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
         env:
-          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
           SHOPIFY_FLAG_FORCE: '1'
           SHOPIFY_CLI_TTY: '0'
+          CI: 'true'
