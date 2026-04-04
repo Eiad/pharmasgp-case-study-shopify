@@ -250,34 +250,37 @@
         }
       }
 
-      async function morphCartFromResponse(response) {
+      async function refreshCartSections() {
         try {
-          var data = await response.clone().json();
-          if (!data.sections) return;
+          // Fetch fresh section HTML separately to ensure discounts are reflected
+          var comp = document.querySelector('cart-items-component');
+          if (!comp || !comp.dataset.sectionId) return;
+          var sectionId = comp.dataset.sectionId;
 
-          document.querySelectorAll('cart-items-component').forEach(function(comp) {
-            var sectionId = comp.dataset.sectionId;
-            var html = data.sections[sectionId];
-            if (!html) return;
+          var res = await fetch('/?sections=' + sectionId);
+          var data = await res.json();
+          var html = data[sectionId];
+          if (!html) return;
 
+          document.querySelectorAll('cart-items-component').forEach(function(c) {
+            var sid = c.dataset.sectionId;
+            var shtml = data[sid] || html;
             var parser = new DOMParser();
-            var doc = parser.parseFromString(html, 'text/html');
+            var doc = parser.parseFromString(shtml, 'text/html');
             var newComp = doc.querySelector('cart-items-component');
             if (!newComp) return;
 
-            Array.from(comp.children).forEach(function(child) { child.remove(); });
+            Array.from(c.children).forEach(function(child) { child.remove(); });
             Array.from(newComp.children).forEach(function(child) {
-              comp.appendChild(child);
+              c.appendChild(child);
             });
           });
 
           // Update cart bubble count
+          var cartData = await getCart();
           var countEl = document.querySelector('.cart-bubble__count, [ref="cartBubbleText"]');
-          if (countEl && data.item_count !== undefined) {
-            countEl.textContent = data.item_count;
-          }
+          if (countEl) countEl.textContent = cartData.item_count;
 
-          // Move gift rows to bottom of cart item list
           reorderGiftItems();
         } catch(e) {
           window.location.reload();
@@ -363,7 +366,7 @@
           if (total >= config.gift && !hasGift) {
             showCartLoading();
             var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
-            if (res && res.ok) await morphCartFromResponse(res);
+            if (res && res.ok) await refreshCartSections();
             hideCartLoading();
             cartChanged = true;
           }
@@ -377,7 +380,7 @@
               showCartLoading();
               var giftLine = cart.items.indexOf(giftItem) + 1;
               var qtyRes = await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
-              if (qtyRes && qtyRes.ok) await morphCartFromResponse(qtyRes);
+              if (qtyRes && qtyRes.ok) await refreshCartSections();
               hideCartLoading();
               cartChanged = true;
             }
@@ -391,7 +394,7 @@
             if (idx !== -1) {
               showCartLoading();
               var rmRes = await cartApiCall('/cart/change.js', { line: idx + 1, quantity: 0 });
-              if (rmRes && rmRes.ok) await morphCartFromResponse(rmRes);
+              if (rmRes && rmRes.ok) await refreshCartSections();
               hideCartLoading();
               cartChanged = true;
             }
