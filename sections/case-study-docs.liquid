@@ -106,8 +106,41 @@
     </div>
   </div>
 
-  <!-- KEY DECISIONS -->
+  <!-- DEV ENVIRONMENT -->
   <div class="cs-section cs-section--light">
+    <p class="cs-label">Development Environment</p>
+    <h2>Shopify CLI Integration</h2>
+    <p class="cs-body">
+      The entire development workflow runs through the <strong>Shopify CLI</strong>, connected
+      directly to the dev store. No manual file uploads, no copy-pasting in the admin.
+    </p>
+    <div class="cs-grid">
+      <div class="cs-card">
+        <h3>Theme Sync</h3>
+        <p><code>shopify theme pull</code> downloads the live theme locally. <code>shopify theme push</code> deploys changes. The CLI handles auth, file diffing, and conflict detection.</p>
+      </div>
+      <div class="cs-card">
+        <h3>Product Management</h3>
+        <p>Products and variants created via the <strong>Admin GraphQL API</strong> through <code>shopify store execute</code>. Prices, images, and publication status — all from the terminal.</p>
+      </div>
+      <div class="cs-card">
+        <h3>Pages from Code</h3>
+        <p>This documentation page is a custom template (<code>page.case-study.json</code>) with a dedicated section. The template lives in the repo — deployed automatically via CI/CD.</p>
+      </div>
+      <div class="cs-card">
+        <h3>Settings via Schema</h3>
+        <p>Progress bar thresholds and gift product are configured in <code>settings_schema.json</code>. Store managers change values in the Theme Editor — no developer needed.</p>
+      </div>
+    </div>
+    <div class="cs-details" style="margin-top: 24px;">
+      <p><strong>Local Dev:</strong> <code>shopify theme dev</code> serves the theme locally with hot reload</p>
+      <p><strong>Store Auth:</strong> <code>shopify store auth</code> enables GraphQL queries against the store</p>
+      <p><strong>Version Control:</strong> Full theme in Git — every change is tracked, reviewable, and reversible</p>
+    </div>
+  </div>
+
+  <!-- KEY DECISIONS -->
+  <div class="cs-section">
     <p class="cs-label">Architecture Decisions</p>
     <h2>Why I Built It This Way</h2>
     <div class="cs-decisions">
