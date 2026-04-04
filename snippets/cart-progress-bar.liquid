@@ -250,41 +250,9 @@
         }
       }
 
-      async function refreshCartSections() {
-        try {
-          // Fetch fresh section HTML separately to ensure discounts are reflected
-          var comp = document.querySelector('cart-items-component');
-          if (!comp || !comp.dataset.sectionId) return;
-          var sectionId = comp.dataset.sectionId;
-
-          var res = await fetch('/?sections=' + sectionId);
-          var data = await res.json();
-          var html = data[sectionId];
-          if (!html) return;
-
-          document.querySelectorAll('cart-items-component').forEach(function(c) {
-            var sid = c.dataset.sectionId;
-            var shtml = data[sid] || html;
-            var parser = new DOMParser();
-            var doc = parser.parseFromString(shtml, 'text/html');
-            var newComp = doc.querySelector('cart-items-component');
-            if (!newComp) return;
-
-            Array.from(c.children).forEach(function(child) { child.remove(); });
-            Array.from(newComp.children).forEach(function(child) {
-              c.appendChild(child);
-            });
-          });
-
-          // Update cart bubble count
-          var cartData = await getCart();
-          var countEl = document.querySelector('.cart-bubble__count, [ref="cartBubbleText"]');
-          if (countEl) countEl.textContent = cartData.item_count;
-
-          reorderGiftItems();
-        } catch(e) {
-          window.location.reload();
-        }
+      // After gift add/remove, reload page to get fresh state with discount applied
+      function refreshAfterGiftChange() {
+        window.location.reload();
       }
 
       // Move gift items to the bottom of the cart list
@@ -366,7 +334,7 @@
           if (total >= config.gift && !hasGift) {
             showCartLoading();
             var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
-            if (res && res.ok) await refreshCartSections();
+            if (res && res.ok) refreshAfterGiftChange(); return;
             hideCartLoading();
             cartChanged = true;
           }
@@ -380,7 +348,7 @@
               showCartLoading();
               var giftLine = cart.items.indexOf(giftItem) + 1;
               var qtyRes = await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
-              if (qtyRes && qtyRes.ok) await refreshCartSections();
+              if (qtyRes && qtyRes.ok) refreshAfterGiftChange(); return;
               hideCartLoading();
               cartChanged = true;
             }
@@ -394,7 +362,7 @@
             if (idx !== -1) {
               showCartLoading();
               var rmRes = await cartApiCall('/cart/change.js', { line: idx + 1, quantity: 0 });
-              if (rmRes && rmRes.ok) await refreshCartSections();
+              if (rmRes && rmRes.ok) refreshAfterGiftChange(); return;
               hideCartLoading();
               cartChanged = true;
             }
