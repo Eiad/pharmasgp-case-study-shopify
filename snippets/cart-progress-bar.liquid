@@ -250,31 +250,30 @@
         }
       }
 
-      async function morphCartFromResponse(response) {
+      // Fetch fresh section HTML and update drawer/page
+      async function refreshDrawer() {
         try {
-          var data = await response.clone().json();
-          if (!data.sections) return;
+          var comps = document.querySelectorAll('cart-items-component');
+          var sectionIds = [];
+          comps.forEach(function(c) { if (c.dataset.sectionId) sectionIds.push(c.dataset.sectionId); });
+          if (sectionIds.length === 0) return;
 
-          document.querySelectorAll('cart-items-component').forEach(function(comp) {
-            var sectionId = comp.dataset.sectionId;
-            var html = data.sections[sectionId];
+          // Small delay to let Shopify process discount
+          await new Promise(function(r) { setTimeout(r, 300); });
+
+          var res = await fetch('/?sections=' + sectionIds.join(','));
+          var data = await res.json();
+
+          comps.forEach(function(comp) {
+            var html = data[comp.dataset.sectionId];
             if (!html) return;
-
             var parser = new DOMParser();
             var doc = parser.parseFromString(html, 'text/html');
             var newComp = doc.querySelector('cart-items-component');
             if (!newComp) return;
-
             Array.from(comp.children).forEach(function(child) { child.remove(); });
-            Array.from(newComp.children).forEach(function(child) {
-              comp.appendChild(child);
-            });
+            Array.from(newComp.children).forEach(function(child) { comp.appendChild(child); });
           });
-
-          var countEl = document.querySelector('.cart-bubble__count, [ref="cartBubbleText"]');
-          if (countEl && data.item_count !== undefined) {
-            countEl.textContent = data.item_count;
-          }
 
           reorderGiftItems();
         } catch(e) {
@@ -361,7 +360,7 @@
           if (total >= config.gift && !hasGift) {
             showCartLoading();
             var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
-            if (res && res.ok) await morphCartFromResponse(res);
+            if (res && res.ok) await refreshDrawer();
             hideCartLoading();
             cartChanged = true;
           }
@@ -375,7 +374,7 @@
               showCartLoading();
               var giftLine = cart.items.indexOf(giftItem) + 1;
               var qtyRes = await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
-              if (qtyRes && qtyRes.ok) await morphCartFromResponse(qtyRes);
+              if (qtyRes && qtyRes.ok) await refreshDrawer();
               hideCartLoading();
               cartChanged = true;
             }
@@ -389,7 +388,7 @@
             if (idx !== -1) {
               showCartLoading();
               var rmRes = await cartApiCall('/cart/change.js', { line: idx + 1, quantity: 0 });
-              if (rmRes && rmRes.ok) await morphCartFromResponse(rmRes);
+              if (rmRes && rmRes.ok) await refreshDrawer();
               hideCartLoading();
               cartChanged = true;
             }
