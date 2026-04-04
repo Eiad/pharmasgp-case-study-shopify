@@ -2,7 +2,7 @@
 
   <!-- HERO -->
   <div class="cs-hero">
-    <p class="cs-label">Case Study — PharmaSGP eCommerce</p>
+    <p class="cs-label">Case Study -PharmaSGP eCommerce</p>
     <h1 class="cs-title">Cart Progress Bar</h1>
     <p class="cs-subtitle">A Tiered Incentive System for Shopify</p>
     <div class="cs-line"></div>
@@ -20,7 +20,7 @@
       cart value changes, and automatically adds the gift when the threshold is reached.
     </p>
     <div class="cs-insight">
-      <strong>Why it works:</strong> The goal-gradient effect — people accelerate effort
+      <strong>Why it works:</strong> The goal-gradient effect -people accelerate effort
       as they approach a reward. A visible progress bar leverages this to increase average order value.
     </div>
   </div>
@@ -136,7 +136,7 @@
             }, 2000);
           })
           .catch(function() {
-            btn.textContent = 'Failed — try again';
+            btn.textContent = 'Failed -try again';
             btn.style.background = '#c0392b';
             setTimeout(function() {
               btn.textContent = originalText;
@@ -156,7 +156,7 @@
     <div class="cs-grid">
       <div class="cs-card">
         <h3>Server-Side First</h3>
-        <p>Liquid calculates the progress bar state on the server. The correct state is visible immediately — no flash of wrong content, no layout shift. Works even if JavaScript fails.</p>
+        <p>Liquid calculates the progress bar state on the server. The correct state is visible immediately -no flash of wrong content, no layout shift. Works even if JavaScript fails.</p>
       </div>
       <div class="cs-card">
         <h3>Real-Time Updates</h3>
@@ -164,7 +164,7 @@
       </div>
       <div class="cs-card">
         <h3>One File, Two Contexts</h3>
-        <p>All code lives in a single snippet (<code>cart-progress-bar.liquid</code>). It renders in both the cart drawer and the full cart page — same component, same behavior.</p>
+        <p>All code lives in a single snippet (<code>cart-progress-bar.liquid</code>). It renders in both the cart drawer and the full cart page -same component, same behavior.</p>
       </div>
       <div class="cs-card">
         <h3>Smart Gift Management</h3>
@@ -200,7 +200,7 @@
     <div class="cs-details">
       <p><strong>Pull Requests:</strong> Theme Check runs automatically with inline annotations</p>
       <p><strong>Settings Protected:</strong> <code>.shopifyignore</code> prevents CI from overwriting admin-configured settings</p>
-      <p><strong>Concurrency:</strong> Rapid pushes cancel old deploys — only the latest runs</p>
+      <p><strong>Concurrency:</strong> Rapid pushes cancel old deploys -only the latest runs</p>
     </div>
   </div>
 
@@ -219,21 +219,21 @@
       </div>
       <div class="cs-card">
         <h3>Product Management</h3>
-        <p>Products and variants created via the <strong>Admin GraphQL API</strong> through <code>shopify store execute</code>. Prices, images, and publication status — all from the terminal.</p>
+        <p>Products and variants created via the <strong>Admin GraphQL API</strong> through <code>shopify store execute</code>. Prices, images, and publication status -all from the terminal.</p>
       </div>
       <div class="cs-card">
         <h3>Pages from Code</h3>
-        <p>This documentation page is a custom template (<code>page.case-study.json</code>) with a dedicated section. The template lives in the repo — deployed automatically via CI/CD.</p>
+        <p>This documentation page is a custom template (<code>page.case-study.json</code>) with a dedicated section. The template lives in the repo -deployed automatically via CI/CD.</p>
       </div>
       <div class="cs-card">
         <h3>Settings via Schema</h3>
-        <p>Progress bar thresholds and gift product are configured in <code>settings_schema.json</code>. Store managers change values in the Theme Editor — no developer needed.</p>
+        <p>Progress bar thresholds and gift product are configured in <code>settings_schema.json</code>. Store managers change values in the Theme Editor -no developer needed.</p>
       </div>
     </div>
     <div class="cs-details" style="margin-top: 24px;">
       <p><strong>Local Dev:</strong> <code>shopify theme dev</code> serves the theme locally with hot reload</p>
       <p><strong>Store Auth:</strong> <code>shopify store auth</code> enables GraphQL queries against the store</p>
-      <p><strong>Version Control:</strong> Full theme in Git — every change is tracked, reviewable, and reversible</p>
+      <p><strong>Version Control:</strong> Full theme in Git -every change is tracked, reviewable, and reversible</p>
     </div>
   </div>
 
@@ -244,15 +244,15 @@
     <div class="cs-decisions">
       <div class="cs-decision">
         <h3>Snippet over Section</h3>
-        <p>Sections only render on specific pages. A snippet can be included in both the cart drawer (header) and the cart page — one component, universal coverage.</p>
+        <p>Sections only render on specific pages. A snippet can be included in both the cart drawer (header) and the cart page -one component, universal coverage.</p>
       </div>
       <div class="cs-decision">
         <h3>Fetch Intercept over Theme Events</h3>
-        <p>Horizon's <code>cart:update</code> event is theme-specific. Intercepting <code>fetch</code> calls to <code>/cart/</code> endpoints works with any Shopify theme — portable and reliable.</p>
+        <p>Horizon's <code>cart:update</code> event is theme-specific. Intercepting <code>fetch</code> calls to <code>/cart/</code> endpoints works with any Shopify theme -portable and reliable.</p>
       </div>
       <div class="cs-decision">
         <h3>Continuous Progress Bar</h3>
-        <p>The bar maps 0-50% to shipping and 50-100% to the gift. This prevents the bar from shrinking when crossing the first threshold — it only ever grows.</p>
+        <p>The bar maps 0-50% to shipping and 50-100% to the gift. This prevents the bar from shrinking when crossing the first threshold -it only ever grows.</p>
       </div>
       <div class="cs-decision">
         <h3>Hidden Line Item Properties</h3>
