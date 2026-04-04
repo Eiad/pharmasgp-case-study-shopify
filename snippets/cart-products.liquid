@@ -125,7 +125,7 @@
             {% for item in cart.items %}
               <tr
                 role="row"
-                class="cart-items__table-row{% if item.parent_relationship.parent != null %} cart-items__nested-line{% endif %}{% unless item.unit_price_measurement %} cart-items__table-row--full-width-variants{% endunless %}"
+                class="cart-items__table-row{% if item.parent_relationship.parent != null %} cart-items__nested-line{% endif %}{% unless item.unit_price_measurement %} cart-items__table-row--full-width-variants{% endunless %}{% if item.properties['_gift'] == 'true' %} cart-items__table-row--gift{% endif %}"
                 ref="cartItemRows[]"
                 data-parent-key="{{ item.parent_relationship.parent.key }}"
                 data-key="{{ item.key }}"
@@ -178,6 +178,9 @@
                         {{- item.product.title -}}
                       </a>
                     </p>
+                    {% if item.properties['_gift'] == 'true' %}
+                      <p class="cart-items__gift-badge">Free Gift</p>
+                    {% endif %}
                     {% if item.product.vendor and block_settings.vendor %}
                       <p>
                         {{ item.product.vendor }}
@@ -395,6 +398,24 @@
 
   .cart-items-disabled {
     pointer-events: none;
+  }
+
+  /* Gift item styling */
+  .cart-items__gift-badge {
+    display: inline-block;
+    background: #e8f5e0;
+    color: #4A9500;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 4px 0 0;
+  }
+  .cart-items__table-row--gift {
+    background: rgba(74, 149, 0, 0.04);
+  }
+  .cart-items__table-row--gift .cart-items__quantity-controls {
+    display: none;
   }
 
   .cart-page--empty .cart-items__wrapper {

@@ -309,7 +309,7 @@
           // GIFT ADD: show overlay immediately, add gift, morph result
           if (total >= config.gift && !hasGift) {
             showCartLoading();
-            var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1 }] });
+            var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
             if (res && res.ok) await morphCartFromResponse(res);
             hideCartLoading();
             cartChanged = true;
