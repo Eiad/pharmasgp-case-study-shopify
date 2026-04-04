@@ -175,8 +175,10 @@
 </style>
 
 <script>
+  console.log('[CP] Script tag executing, __cartProgressInit:', window.__cartProgressInit);
   if (!window.__cartProgressInit) {
     window.__cartProgressInit = true;
+    console.log('[CP] Initializing progress bar JS');
 
     (function() {
       var WRAPPER_SEL = '.cart-progress-wrapper';
@@ -340,7 +342,12 @@
 
       async function update() {
         console.log('[CP] update() called, isUpdating:', isUpdating);
-        if (isUpdating) return;
+        if (isUpdating) {
+          console.log('[CP] BLOCKED by isUpdating lock');
+          // Force unlock after 5 seconds to prevent permanent lock
+          setTimeout(function() { isUpdating = false; }, 5000);
+          return;
+        }
         isUpdating = true;
         try {
           var config = getConfig();
