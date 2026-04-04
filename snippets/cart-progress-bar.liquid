@@ -36,7 +36,6 @@
   endif
 -%}
 
-{%- comment -%} Stable wrapper for morphdom — always present even when cart empty {%- endcomment -%}
 <div class="cart-progress-wrapper"
      data-hydration-key="cart-progress"
      data-shipping-threshold="{{ shipping_limit }}"
@@ -71,17 +70,24 @@
 </div>
 
 <style>
+  /* ============================================
+     PROGRESS BAR — Matching case study design
+     ============================================ */
+  .cart-progress-wrapper {
+    padding: 0 var(--padding-lg, 16px);
+  }
+
   .cart-progress {
     background: #F0F4F6;
     border-radius: 10px;
     padding: 14px 16px;
-    margin: 0 0 16px;
+    margin: 8px 0 12px;
     transition: background 0.4s ease;
   }
   .cart-progress.is-complete { background: #e8f5e0; }
 
   .cart-progress__status {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: #002F6C;
     margin: 0 0 10px;
@@ -90,16 +96,16 @@
   .cart-progress__status--success { color: #4A9500; }
 
   .cart-progress__track {
-    height: 7px;
+    height: 6px;
     background: #d0d8de;
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
   }
 
   .cart-progress__fill {
     height: 100%;
     background: #002F6C;
-    border-radius: 4px;
+    border-radius: 3px;
     transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .cart-progress__fill--complete { background: #4A9500; }
@@ -110,26 +116,30 @@
     margin: 8px 0 0;
   }
 
-  /* Loading shimmer while gift is being added/removed */
-  .cart-progress--loading .cart-progress__fill {
-    animation: shimmer 1.2s ease-in-out infinite;
+  /* ============================================
+     CART LOADING OVERLAY — shown during gift ops
+     ============================================ */
+  .cart-gift-updating {
+    position: relative;
+    pointer-events: none;
   }
-  .cart-progress--loading .cart-progress__status,
-  .cart-progress--loading .cart-progress__helper {
-    opacity: 0.5;
+  .cart-gift-updating::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(1px);
+    z-index: 10;
+    border-radius: inherit;
+    animation: cart-fade-in 0.15s ease;
   }
-  @keyframes shimmer {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+  @keyframes cart-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
-
-  /* In production, use theme CSS variables for color scheme adaptability:
-     --color-foreground, --color-background, --color-success, etc. */
 </style>
 
 <script>
-  // Guard: only set up once even if snippet renders in multiple contexts
   if (!window.__cartProgressInit) {
     window.__cartProgressInit = true;
 
@@ -137,7 +147,7 @@
       var WRAPPER_SEL = '.cart-progress-wrapper';
       var debounceTimer;
       var isUpdating = false;
-      var isOwnCartCall = false; // flag to skip intercepting our own calls
+      var isOwnCartCall = false;
 
       function getConfig() {
         var el = document.querySelector(WRAPPER_SEL);
@@ -151,8 +161,6 @@
         };
       }
 
-      // Format cents to display price
-      // In production, use: import { formatMoney } from '@theme/money-formatting'
       function formatMoney(cents, symbol) {
         return symbol + (cents / 100).toFixed(2);
       }
@@ -163,7 +171,6 @@
         return res.json();
       }
 
-      // Get all cart-items-component section IDs for section rendering
       function getCartSectionIds() {
         var ids = [];
         document.querySelectorAll('cart-items-component').forEach(function(c) {
@@ -172,9 +179,21 @@
         return ids;
       }
 
+      // Show loading overlay on the cart drawer/page
+      function showCartLoading() {
+        document.querySelectorAll('cart-items-component').forEach(function(c) {
+          c.classList.add('cart-gift-updating');
+        });
+      }
+
+      function hideCartLoading() {
+        document.querySelectorAll('cart-items-component').forEach(function(c) {
+          c.classList.remove('cart-gift-updating');
+        });
+      }
+
       async function cartApiCall(url, body) {
         isOwnCartCall = true;
-        // Include sections so Horizon can morph from the response
         var sectionIds = getCartSectionIds();
         if (sectionIds.length > 0) {
           body.sections = sectionIds.join(',');
@@ -196,24 +215,11 @@
         }
       }
 
-      async function addGift(variantId) {
-        var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(variantId, 10), quantity: 1 }] });
-        if (!res || !res.ok) { console.warn('Cart progress: could not add gift'); return; }
-        await morphCartFromResponse(res);
-      }
-
-      async function removeGift(lineIndex) {
-        var res = await cartApiCall('/cart/change.js', { line: lineIndex, quantity: 0 });
-        if (res && res.ok) await morphCartFromResponse(res);
-      }
-
-      // Use Horizon's own morph to update cart sections from API response
       async function morphCartFromResponse(response) {
         try {
           var data = await response.clone().json();
           if (!data.sections) return;
 
-          // Morph each cart-items-component with fresh HTML from response
           document.querySelectorAll('cart-items-component').forEach(function(comp) {
             var sectionId = comp.dataset.sectionId;
             var html = data.sections[sectionId];
@@ -224,21 +230,18 @@
             var newComp = doc.querySelector('cart-items-component');
             if (!newComp) return;
 
-            // Use morphdom-style: replace only the inner children, preserving the component wrapper
-            // This keeps Horizon's web component refs intact
             Array.from(comp.children).forEach(function(child) { child.remove(); });
             Array.from(newComp.children).forEach(function(child) {
               comp.appendChild(child);
             });
           });
 
-          // Update cart count bubble
+          // Update cart bubble count
           var countEl = document.querySelector('.cart-bubble__count, [ref="cartBubbleText"]');
           if (countEl && data.item_count !== undefined) {
             countEl.textContent = data.item_count;
           }
         } catch(e) {
-          console.warn('Cart progress: morph failed, reloading');
           window.location.reload();
         }
       }
@@ -288,7 +291,6 @@
         bar.setAttribute('aria-label', statusText);
       }
 
-      // Main: check gift logic and update bar after gift changes
       async function update() {
         if (isUpdating) return;
         isUpdating = true;
@@ -303,46 +305,50 @@
           });
 
           var cartChanged = false;
-          var bar = config.el.querySelector('.cart-progress');
 
+          // GIFT ADD: show overlay immediately, add gift, morph result
           if (total >= config.gift && !hasGift) {
-            if (bar) bar.classList.add('cart-progress--loading');
-            await addGift(config.giftVariant);
+            showCartLoading();
+            var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1 }] });
+            if (res && res.ok) await morphCartFromResponse(res);
+            hideCartLoading();
             cartChanged = true;
           }
-          // Enforce gift qty = 1
+
+          // GIFT QTY ENFORCE: reset to 1 if user changed it
           if (!cartChanged && total >= config.gift && hasGift) {
             var giftItem = cart.items.find(function(item) {
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (giftItem && giftItem.quantity > 1) {
-              if (bar) bar.classList.add('cart-progress--loading');
+              showCartLoading();
               var giftLine = cart.items.indexOf(giftItem) + 1;
               var qtyRes = await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
               if (qtyRes && qtyRes.ok) await morphCartFromResponse(qtyRes);
+              hideCartLoading();
               cartChanged = true;
             }
           }
+
+          // GIFT REMOVE: show overlay, remove gift, morph result
           if (!cartChanged && total < config.gift && hasGift) {
             var idx = cart.items.findIndex(function(item) {
               return String(item.variant_id) === String(config.giftVariant);
             });
             if (idx !== -1) {
-              if (bar) bar.classList.add('cart-progress--loading');
-              await removeGift(idx + 1);
+              showCartLoading();
+              var rmRes = await cartApiCall('/cart/change.js', { line: idx + 1, quantity: 0 });
+              if (rmRes && rmRes.ok) await morphCartFromResponse(rmRes);
+              hideCartLoading();
               cartChanged = true;
             }
           }
 
-          if (cartChanged) {
-            // Gift was added/removed — morphCartFromResponse already updated the DOM
-            isUpdating = false;
-            return;
-          }
+          if (cartChanged) { isUpdating = false; return; }
 
-          // Update UI after gift operations (Liquid/morph handles normal quantity changes)
           updateUI(config, total);
         } catch (e) {
+          hideCartLoading();
           console.error('Cart progress bar:', e);
         } finally {
           isUpdating = false;
@@ -354,7 +360,6 @@
         debounceTimer = setTimeout(update, 100);
       }
 
-      // Detect cart changes: intercept fetch to /cart/ endpoints
       var originalFetch = window.fetch;
       window.fetch = function() {
         var args = arguments;
@@ -367,10 +372,8 @@
         });
       };
 
-      // Also listen for Horizon theme's cart update event
       document.addEventListener('cart:update', scheduleUpdate);
 
-      // Run on page load for gift management
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', update);
       } else {
