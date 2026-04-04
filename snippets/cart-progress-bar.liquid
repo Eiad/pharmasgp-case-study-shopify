@@ -163,8 +163,23 @@
         return res.json();
       }
 
+      // Get all cart-items-component section IDs for section rendering
+      function getCartSectionIds() {
+        var ids = [];
+        document.querySelectorAll('cart-items-component').forEach(function(c) {
+          if (c.dataset.sectionId) ids.push(c.dataset.sectionId);
+        });
+        return ids;
+      }
+
       async function cartApiCall(url, body) {
         isOwnCartCall = true;
+        // Include sections so Horizon can morph from the response
+        var sectionIds = getCartSectionIds();
+        if (sectionIds.length > 0) {
+          body.sections = sectionIds.join(',');
+          body.sections_url = window.location.pathname;
+        }
         try {
           var res = await fetch(url, {
             method: 'POST',
@@ -183,16 +198,49 @@
 
       async function addGift(variantId) {
         var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(variantId, 10), quantity: 1 }] });
-        if (!res || !res.ok) console.warn('Cart progress: could not add gift product');
+        if (!res || !res.ok) { console.warn('Cart progress: could not add gift'); return; }
+        await morphCartFromResponse(res);
       }
 
       async function removeGift(lineIndex) {
-        await cartApiCall('/cart/change.js', { line: lineIndex, quantity: 0 });
+        var res = await cartApiCall('/cart/change.js', { line: lineIndex, quantity: 0 });
+        if (res && res.ok) await morphCartFromResponse(res);
       }
 
-      // After gift add/remove, reload the page to let Horizon re-render properly
-      function refreshCart() {
-        window.location.reload();
+      // Use Horizon's own morph to update cart sections from API response
+      async function morphCartFromResponse(response) {
+        try {
+          var data = await response.clone().json();
+          if (!data.sections) return;
+
+          // Morph each cart-items-component with fresh HTML from response
+          document.querySelectorAll('cart-items-component').forEach(function(comp) {
+            var sectionId = comp.dataset.sectionId;
+            var html = data.sections[sectionId];
+            if (!html) return;
+
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+            var newComp = doc.querySelector('cart-items-component');
+            if (!newComp) return;
+
+            // Use morphdom-style: replace only the inner children, preserving the component wrapper
+            // This keeps Horizon's web component refs intact
+            Array.from(comp.children).forEach(function(child) { child.remove(); });
+            Array.from(newComp.children).forEach(function(child) {
+              comp.appendChild(child);
+            });
+          });
+
+          // Update cart count bubble
+          var countEl = document.querySelector('.cart-bubble__count, [ref="cartBubbleText"]');
+          if (countEl && data.item_count !== undefined) {
+            countEl.textContent = data.item_count;
+          }
+        } catch(e) {
+          console.warn('Cart progress: morph failed, reloading');
+          window.location.reload();
+        }
       }
 
       function updateUI(config, total) {
@@ -270,7 +318,8 @@
             if (giftItem && giftItem.quantity > 1) {
               if (bar) bar.classList.add('cart-progress--loading');
               var giftLine = cart.items.indexOf(giftItem) + 1;
-              await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
+              var qtyRes = await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
+              if (qtyRes && qtyRes.ok) await morphCartFromResponse(qtyRes);
               cartChanged = true;
             }
           }
@@ -286,7 +335,8 @@
           }
 
           if (cartChanged) {
-            refreshCart();
+            // Gift was added/removed — morphCartFromResponse already updated the DOM
+            isUpdating = false;
             return;
           }
 
