@@ -48,7 +48,105 @@
         <span class="cs-state__desc">Both rewards unlocked + gift auto-added</span>
       </div>
     </div>
-    <a href="/products/kijimea-k53-advance" class="cs-cta">Add Kijimea K53 to Cart →</a>
+    {%- assign cs_product = all_products['kijimea-k53-advance'] -%}
+    {%- if cs_product != blank -%}
+      {%- assign cs_variant = cs_product.selected_or_first_available_variant -%}
+      <div class="cs-product-card">
+        <div class="cs-product-card__image">
+          {{ cs_product.featured_image | image_url: width: 160 | image_tag: class: 'cs-product-card__img' }}
+        </div>
+        <div class="cs-product-card__info">
+          <h3 class="cs-product-card__title">{{ cs_product.title }}</h3>
+          <div class="cs-product-card__price">
+            <span class="cs-product-card__current">{{ cs_variant.price | money }}</span>
+            {%- if cs_variant.compare_at_price > cs_variant.price -%}
+              <s class="cs-product-card__compare">{{ cs_variant.compare_at_price | money }}</s>
+            {%- endif -%}
+          </div>
+          <button type="button"
+                  class="cs-cta cs-product-card__btn"
+                  id="cs-atc-btn"
+                  data-variant-id="{{ cs_variant.id }}"
+                  data-cart-url="{{ routes.cart_add_url | append: '.js' }}">
+            Add to Cart
+          </button>
+        </div>
+      </div>
+    {%- else -%}
+      <a href="/collections/all" class="cs-cta">Browse Products →</a>
+    {%- endif -%}
+
+    <script>
+      (function() {
+        var btn = document.getElementById('cs-atc-btn');
+        if (!btn) return;
+
+        btn.addEventListener('click', function() {
+          if (btn.disabled) return;
+          btn.disabled = true;
+          var originalText = btn.textContent;
+          btn.textContent = 'Adding...';
+
+          var variantId = parseInt(btn.dataset.variantId, 10);
+          var cartUrl = btn.dataset.cartUrl;
+
+          // Get cart drawer section ID for fresh HTML in response
+          var comp = document.querySelector('cart-items-component');
+          var sectionId = comp ? comp.dataset.sectionId : '';
+          var body = { items: [{ id: variantId, quantity: 1 }] };
+          if (sectionId) body.sections = sectionId;
+
+          fetch(cartUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+          .then(function(res) {
+            if (!res.ok) throw new Error('Add to cart failed');
+            return res.json();
+          })
+          .then(function(data) {
+            // Update drawer content with fresh HTML from response
+            if (data.sections && comp && sectionId) {
+              var html = data.sections[sectionId];
+              if (html) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var newComp = doc.querySelector('cart-items-component');
+                if (newComp) {
+                  Array.from(comp.children).forEach(function(c) { c.remove(); });
+                  Array.from(newComp.children).forEach(function(c) { comp.appendChild(c); });
+                }
+              }
+            }
+
+            // Open cart drawer
+            var drawer = document.querySelector('cart-drawer-component');
+            if (drawer && drawer.open) {
+              drawer.open();
+            }
+
+            // Success state
+            btn.textContent = '✓ Added!';
+            btn.style.background = '#4A9500';
+            setTimeout(function() {
+              btn.textContent = originalText;
+              btn.style.background = '';
+              btn.disabled = false;
+            }, 2000);
+          })
+          .catch(function() {
+            btn.textContent = 'Failed — try again';
+            btn.style.background = '#c0392b';
+            setTimeout(function() {
+              btn.textContent = originalText;
+              btn.style.background = '';
+              btn.disabled = false;
+            }, 2000);
+          });
+        });
+      })();
+    </script>
   </div>
 
   <!-- HOW IT WORKS -->
@@ -310,10 +408,74 @@
     text-decoration: none;
     font-weight: 600;
     font-size: 0.9rem;
-    margin-top: 12px;
     transition: background 0.2s;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
   }
   .cs-cta:hover { background: #003d8f; color: white; }
+  .cs-cta:disabled { opacity: 0.7; cursor: wait; }
+
+  /* Product card */
+  .cs-product-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: #F0F4F6;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 24px 0 0;
+    border: 1px solid rgba(0,47,108,0.06);
+  }
+  .cs-product-card__image {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+  }
+  .cs-product-card__img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .cs-product-card__info {
+    flex: 1;
+  }
+  .cs-product-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #002F6C;
+    margin: 0 0 6px;
+  }
+  .cs-product-card__price {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .cs-product-card__current {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #002F6C;
+  }
+  .cs-product-card__compare {
+    font-size: 0.85rem;
+    color: #6b6d70;
+    text-decoration: line-through;
+  }
+  .cs-product-card__btn {
+    margin: 0;
+    padding: 10px 24px;
+  }
+  @media (max-width: 480px) {
+    .cs-product-card {
+      flex-direction: column;
+      text-align: center;
+    }
+    .cs-product-card__price { justify-content: center; }
+  }
 
   /* Grid cards */
   .cs-grid {
