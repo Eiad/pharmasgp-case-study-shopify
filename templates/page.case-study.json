@@ -1,0 +1,11 @@
+{
+  "sections": {
+    "case-study": {
+      "type": "case-study-docs",
+      "settings": {}
+    }
+  },
+  "order": [
+    "case-study"
+  ]
+}

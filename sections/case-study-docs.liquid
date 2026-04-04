@@ -1,0 +1,461 @@
+<div class="cs-page">
+
+  <!-- HERO -->
+  <div class="cs-hero">
+    <p class="cs-label">Case Study — PharmaSGP eCommerce</p>
+    <h1 class="cs-title">Cart Progress Bar</h1>
+    <p class="cs-subtitle">A Tiered Incentive System for Shopify</p>
+    <div class="cs-line"></div>
+    <p class="cs-meta">Shopify Liquid · HTML · CSS · JavaScript<br>Ashraf · April 2026</p>
+  </div>
+
+  <!-- THE CHALLENGE -->
+  <div class="cs-section cs-section--light">
+    <p class="cs-label">The Challenge</p>
+    <h2>Motivating Customers to Add More</h2>
+    <p class="cs-body">
+      Design and build a dynamic progress bar for the shopping cart that guides
+      customers through two reward tiers: <strong>free shipping</strong> at $39.99 and a
+      <strong>free gift product</strong> at $99.99. The bar updates in real-time as the
+      cart value changes, and automatically adds the gift when the threshold is reached.
+    </p>
+    <div class="cs-insight">
+      <strong>Why it works:</strong> The goal-gradient effect — people accelerate effort
+      as they approach a reward. A visible progress bar leverages this to increase average order value.
+    </div>
+  </div>
+
+  <!-- TRY IT LIVE -->
+  <div class="cs-section">
+    <p class="cs-label">Interactive Demo</p>
+    <h2>Try It Live</h2>
+    <p class="cs-body">
+      Add <strong>Kijimea K53 Advance</strong> to your cart and change the quantity to see
+      the progress bar respond in real-time. Watch the bar grow, the text update, and the
+      free gift appear automatically.
+    </p>
+    <div class="cs-states">
+      <div class="cs-state">
+        <span class="cs-state__label">1 item ($29.99)</span>
+        <span class="cs-state__desc">Working toward free shipping</span>
+      </div>
+      <div class="cs-state">
+        <span class="cs-state__label">2 items ($59.98)</span>
+        <span class="cs-state__desc">Shipping unlocked, working toward gift</span>
+      </div>
+      <div class="cs-state cs-state--success">
+        <span class="cs-state__label">4 items ($119.96)</span>
+        <span class="cs-state__desc">Both rewards unlocked + gift auto-added</span>
+      </div>
+    </div>
+    <a href="/products/kijimea-k53-advance" class="cs-cta">Add Kijimea K53 to Cart →</a>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="cs-section cs-section--light">
+    <p class="cs-label">Technical Approach</p>
+    <h2>How It Works</h2>
+    <div class="cs-grid">
+      <div class="cs-card">
+        <h3>Server-Side First</h3>
+        <p>Liquid calculates the progress bar state on the server. The correct state is visible immediately — no flash of wrong content, no layout shift. Works even if JavaScript fails.</p>
+      </div>
+      <div class="cs-card">
+        <h3>Real-Time Updates</h3>
+        <p>JavaScript intercepts cart API calls and updates the bar dynamically. A loading overlay shows during gift operations. The theme's own morph system handles section re-rendering.</p>
+      </div>
+      <div class="cs-card">
+        <h3>One File, Two Contexts</h3>
+        <p>All code lives in a single snippet (<code>cart-progress-bar.liquid</code>). It renders in both the cart drawer and the full cart page — same component, same behavior.</p>
+      </div>
+      <div class="cs-card">
+        <h3>Smart Gift Management</h3>
+        <p>The gift product auto-adds when the threshold is reached and auto-removes when it drops below. Quantity is locked to 1, marked with a "Free Gift" badge, and controls are hidden.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CI/CD -->
+  <div class="cs-section">
+    <p class="cs-label">Development Workflow</p>
+    <h2>CI/CD Pipeline</h2>
+    <p class="cs-body">
+      Every push to <code>main</code> automatically lints the Liquid code and deploys to the store.
+      No manual theme uploads needed.
+    </p>
+    <div class="cs-pipeline">
+      <div class="cs-pipe-step">
+        <span class="cs-pipe-icon">1</span>
+        <span class="cs-pipe-text">Push to GitHub</span>
+      </div>
+      <div class="cs-pipe-arrow">→</div>
+      <div class="cs-pipe-step">
+        <span class="cs-pipe-icon">2</span>
+        <span class="cs-pipe-text">Theme Check (Lint)</span>
+      </div>
+      <div class="cs-pipe-arrow">→</div>
+      <div class="cs-pipe-step">
+        <span class="cs-pipe-icon">3</span>
+        <span class="cs-pipe-text">Auto-Deploy to Store</span>
+      </div>
+    </div>
+    <div class="cs-details">
+      <p><strong>Pull Requests:</strong> Theme Check runs automatically with inline annotations</p>
+      <p><strong>Settings Protected:</strong> <code>.shopifyignore</code> prevents CI from overwriting admin-configured settings</p>
+      <p><strong>Concurrency:</strong> Rapid pushes cancel old deploys — only the latest runs</p>
+    </div>
+  </div>
+
+  <!-- KEY DECISIONS -->
+  <div class="cs-section cs-section--light">
+    <p class="cs-label">Architecture Decisions</p>
+    <h2>Why I Built It This Way</h2>
+    <div class="cs-decisions">
+      <div class="cs-decision">
+        <h3>Snippet over Section</h3>
+        <p>Sections only render on specific pages. A snippet can be included in both the cart drawer (header) and the cart page — one component, universal coverage.</p>
+      </div>
+      <div class="cs-decision">
+        <h3>Fetch Intercept over Theme Events</h3>
+        <p>Horizon's <code>cart:update</code> event is theme-specific. Intercepting <code>fetch</code> calls to <code>/cart/</code> endpoints works with any Shopify theme — portable and reliable.</p>
+      </div>
+      <div class="cs-decision">
+        <h3>Continuous Progress Bar</h3>
+        <p>The bar maps 0-50% to shipping and 50-100% to the gift. This prevents the bar from shrinking when crossing the first threshold — it only ever grows.</p>
+      </div>
+      <div class="cs-decision">
+        <h3>Hidden Line Item Properties</h3>
+        <p>The gift is added with <code>_gift: "true"</code> property. The underscore prefix hides it from customers. Liquid uses it to show the "Free Gift" badge and hide quantity controls.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINKS -->
+  <div class="cs-section cs-footer">
+    <h2>Resources</h2>
+    <div class="cs-links">
+      <a href="https://github.com/Eiad/pharmasgp-case-study-shopify" target="_blank" class="cs-link">
+        Source Code (GitHub) →
+      </a>
+      <a href="https://pharmasgp-case-study.vercel.app" target="_blank" class="cs-link">
+        Interactive Presentation →
+      </a>
+      <a href="/products/kijimea-k53-advance" class="cs-link">
+        Try the Demo →
+      </a>
+    </div>
+    <p class="cs-footer-text">Ashraf · Case Study Submission · PharmaSGP · April 2026</p>
+  </div>
+
+</div>
+
+{% stylesheet %}
+  .cs-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #48494B;
+    line-height: 1.7;
+  }
+
+  /* Hero */
+  .cs-hero {
+    padding: 60px 0 40px;
+  }
+  .cs-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #002F6C;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .cs-subtitle {
+    font-size: 1.1rem;
+    color: #6b6d70;
+    font-weight: 300;
+    margin: 0;
+  }
+  .cs-line {
+    width: 50px;
+    height: 3px;
+    background: #002F6C;
+    border-radius: 2px;
+    margin: 24px 0;
+  }
+  .cs-meta {
+    font-size: 0.85rem;
+    color: #6b6d70;
+    line-height: 1.8;
+  }
+
+  /* Labels */
+  .cs-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #002F6C;
+    opacity: 0.6;
+    margin: 0 0 12px;
+  }
+
+  /* Sections */
+  .cs-section {
+    padding: 48px 0;
+    border-top: 1px solid #F0F4F6;
+  }
+  .cs-section--light {
+    background: #F0F4F6;
+    margin: 0 -20px;
+    padding: 48px 20px;
+    border-radius: 0;
+  }
+  .cs-section h2 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #002F6C;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  .cs-body {
+    font-size: 1rem;
+    max-width: 600px;
+    margin: 0 0 24px;
+  }
+
+  /* Insight box */
+  .cs-insight {
+    background: white;
+    border-left: 3px solid #002F6C;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    color: #6b6d70;
+    margin-top: 20px;
+  }
+  .cs-insight strong { color: #002F6C; }
+
+  /* State cards */
+  .cs-states {
+    display: flex;
+    gap: 12px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+  .cs-state {
+    flex: 1;
+    min-width: 180px;
+    background: #F0F4F6;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .cs-state--success {
+    background: #e8f5e0;
+  }
+  .cs-state__label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #002F6C;
+    margin-bottom: 4px;
+  }
+  .cs-state--success .cs-state__label { color: #4A9500; }
+  .cs-state__desc {
+    font-size: 0.78rem;
+    color: #6b6d70;
+  }
+
+  /* CTA */
+  .cs-cta {
+    display: inline-block;
+    background: #002F6C;
+    color: white;
+    padding: 12px 28px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 12px;
+    transition: background 0.2s;
+  }
+  .cs-cta:hover { background: #003d8f; color: white; }
+
+  /* Grid cards */
+  .cs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  @media (max-width: 600px) {
+    .cs-grid { grid-template-columns: 1fr; }
+  }
+  .cs-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid rgba(0,47,108,0.06);
+  }
+  .cs-card h3 {
+    font-size: 0.95rem;
+    color: #002F6C;
+    margin: 0 0 8px;
+  }
+  .cs-card p {
+    font-size: 0.85rem;
+    color: #6b6d70;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .cs-card code {
+    background: #F0F4F6;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+  }
+
+  /* Pipeline */
+  .cs-pipeline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+  .cs-pipe-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #F0F4F6;
+    padding: 12px 18px;
+    border-radius: 8px;
+  }
+  .cs-pipe-icon {
+    width: 28px;
+    height: 28px;
+    background: #002F6C;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .cs-pipe-text {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #48494B;
+  }
+  .cs-pipe-arrow {
+    color: #002F6C;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+  .cs-details {
+    margin-top: 20px;
+  }
+  .cs-details p {
+    font-size: 0.85rem;
+    color: #6b6d70;
+    margin: 6px 0;
+  }
+  .cs-details strong { color: #48494B; }
+  .cs-details code {
+    background: #F0F4F6;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+  }
+
+  /* Decisions */
+  .cs-decisions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  @media (max-width: 600px) {
+    .cs-decisions { grid-template-columns: 1fr; }
+  }
+  .cs-decision {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 3px solid #002F6C;
+  }
+  .cs-decision h3 {
+    font-size: 0.9rem;
+    color: #002F6C;
+    margin: 0 0 8px;
+  }
+  .cs-decision p {
+    font-size: 0.82rem;
+    color: #6b6d70;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .cs-decision code {
+    background: #F0F4F6;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.78rem;
+  }
+
+  /* Footer / Links */
+  .cs-footer {
+    text-align: center;
+    padding: 48px 0 60px;
+  }
+  .cs-footer h2 {
+    color: #002F6C;
+  }
+  .cs-links {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+  .cs-link {
+    display: inline-block;
+    padding: 10px 20px;
+    border: 1.5px solid rgba(0,47,108,0.15);
+    border-radius: 8px;
+    text-decoration: none;
+    color: #002F6C;
+    font-weight: 500;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  .cs-link:hover {
+    background: #002F6C;
+    color: white;
+    border-color: #002F6C;
+  }
+  .cs-footer-text {
+    font-size: 0.8rem;
+    color: #6b6d70;
+    margin-top: 24px;
+  }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    .cs-title { font-size: 1.8rem; }
+    .cs-section h2 { font-size: 1.3rem; }
+    .cs-hero { padding: 40px 0 24px; }
+    .cs-pipeline { flex-direction: column; align-items: flex-start; }
+    .cs-pipe-arrow { transform: rotate(90deg); }
+    .cs-states { flex-direction: column; }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Case Study Documentation",
+  "settings": []
+}
+{% endschema %}
