@@ -1,0 +1,15 @@
+name: Theme Check
+on:
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint Liquid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shopify/theme-check-action@v2
+        with:
+          theme_root: '.'
+          token: ${{ github.token }}
+          base: main
