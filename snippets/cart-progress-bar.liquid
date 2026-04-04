@@ -241,9 +241,22 @@
           if (countEl && data.item_count !== undefined) {
             countEl.textContent = data.item_count;
           }
+
+          // Move gift rows to bottom of cart item list
+          reorderGiftItems();
         } catch(e) {
           window.location.reload();
         }
+      }
+
+      // Move gift items to the bottom of the cart list
+      function reorderGiftItems() {
+        document.querySelectorAll('tbody[role="rowgroup"]').forEach(function(tbody) {
+          var giftRows = tbody.querySelectorAll('.cart-items__table-row--gift');
+          giftRows.forEach(function(row) {
+            tbody.appendChild(row);
+          });
+        });
       }
 
       function updateUI(config, total) {
@@ -347,6 +360,7 @@
           if (cartChanged) { isUpdating = false; return; }
 
           updateUI(config, total);
+          reorderGiftItems();
         } catch (e) {
           hideCartLoading();
           console.error('Cart progress bar:', e);
@@ -375,10 +389,16 @@
       document.addEventListener('cart:update', scheduleUpdate);
 
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', update);
+        document.addEventListener('DOMContentLoaded', function() { update(); reorderGiftItems(); });
       } else {
         update();
+        reorderGiftItems();
       }
+
+      // Also reorder after Horizon's own morph updates
+      document.addEventListener('cart:update', function() {
+        setTimeout(reorderGiftItems, 200);
+      });
     })();
   }
 </script>
