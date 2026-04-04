@@ -8,7 +8,15 @@
   assign shipping_limit = settings.cart_progress_shipping_threshold | plus: 0 | times: 100 | round
   assign gift_limit = settings.cart_progress_gift_threshold | plus: 0 | times: 100 | round
   assign gift_variant_id = settings.cart_progress_gift_variant_id
-  assign cart_total = cart.items_subtotal_price
+  assign gift_vid = gift_variant_id | plus: 0
+
+  # Calculate subtotal EXCLUDING the gift item to prevent circular dependency
+  assign cart_total = 0
+  for item in cart.items
+    unless item.variant.id == gift_vid or item.properties['_gift'] == 'true'
+      assign cart_total = cart_total | plus: item.final_line_price
+    endunless
+  endfor
 
   if cart_total >= gift_limit
     assign progress = 100
@@ -339,7 +347,12 @@
           if (!config || !config.giftVariant) { isUpdating = false; return; }
 
           var cart = await getCart();
-          var total = cart.items_subtotal_price;
+          // Calculate subtotal EXCLUDING gift to prevent circular dependency
+          var total = cart.items.reduce(function(sum, item) {
+            var isGift = (item.properties && item.properties._gift === 'true') ||
+                         String(item.variant_id) === String(config.giftVariant);
+            return isGift ? sum : sum + item.final_line_price;
+          }, 0);
           var hasGift = cart.items.some(function(item) {
             return String(item.variant_id) === String(config.giftVariant);
           });
