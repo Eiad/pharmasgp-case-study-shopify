@@ -402,20 +402,44 @@
 
   /* Gift item styling */
   .cart-items__gift-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     background: #e8f5e0;
     color: #4A9500;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: 3px 10px;
+    border-radius: 5px;
     margin: 4px 0 0;
+    letter-spacing: 0.01em;
   }
+  .cart-items__gift-badge::before {
+    content: '🎁';
+    font-size: 0.75rem;
+  }
+
   .cart-items__table-row--gift {
-    background: rgba(74, 149, 0, 0.04);
+    background: rgba(74, 149, 0, 0.05);
+    position: relative;
   }
+  .cart-items__table-row--gift > td:first-child {
+    border-left: 3px solid #4A9500;
+  }
+
   .cart-items__table-row--gift .cart-items__quantity-controls {
     display: none;
+  }
+
+  /* Gift price in green */
+  .cart-items__table-row--gift .cart-items__price text-component {
+    color: #4A9500;
+    font-weight: 600;
+  }
+
+  /* Soften gift product image slightly */
+  .cart-items__table-row--gift .cart-items__media img {
+    opacity: 0.88;
   }
 
   .cart-page--empty .cart-items__wrapper {
