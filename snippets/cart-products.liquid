@@ -388,12 +388,24 @@
 
 {% stylesheet %}
   .cart-items {
-    --cart-item-media-width-min: 2.5rem;
-    --cart-item-media-width-max: 7.5rem;
+    --cart-item-media-width-min: 3.5rem;
+    --cart-item-media-width-max: 5.5rem;
 
     container-name: cart-items;
     container-type: inline-size;
     width: 100%;
+  }
+
+  /* Tighter cart item layout */
+  .cart-items__table-row td {
+    padding-block: 10px;
+  }
+  .cart-items__media {
+    padding-right: 12px;
+  }
+  .cart-items__details {
+    vertical-align: top;
+    padding-top: 12px;
   }
 
   .cart-items-disabled {
