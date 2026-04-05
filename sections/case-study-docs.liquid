@@ -176,27 +176,27 @@
   <!-- GIFT PRICING -->
   <div class="cs-section">
     <p class="cs-label">Gift Product Strategy</p>
-    <h2>Real Pricing with Automatic Discount</h2>
+    <h2>Automatic Gift Management</h2>
     <p class="cs-body">
-      The gift product (Kijimea Liquid) has a <strong>real price of $13.99</strong> - it's not a fake $0 product.
-      A Shopify <strong>Buy X Get Y automatic discount</strong> makes it free when the cart threshold is reached.
+      The gift product (Kijimea Liquid) is set up with a <strong>compare-at price of $13.99</strong> and a
+      selling price of $0.00. The cart shows the value with a strikethrough: <s>$13.99</s> $0.00.
     </p>
     <div class="cs-grid">
       <div class="cs-card">
-        <h3>How It Works</h3>
-        <p>When the customer spends $99.99+ on Kijimea K53 Advance, Shopify's native discount engine automatically applies 100% off on the Kijimea Liquid. The cart shows <s>$13.99</s> $0.00 with a discount line.</p>
+        <h3>Auto-Add / Auto-Remove</h3>
+        <p>JavaScript monitors the cart subtotal. When the customer crosses $99.99, the gift is automatically added. When they drop below, it's removed. No manual action needed.</p>
       </div>
       <div class="cs-card">
-        <h3>Why Real Pricing</h3>
-        <p>A $0 product feels fake. A $13.99 product discounted to free feels like a genuine reward. The customer sees the value they're getting, which reinforces the incentive to keep shopping.</p>
+        <h3>Perceived Value</h3>
+        <p>The compare-at price ($13.99) shows as a strikethrough next to $0.00. Customers see the value of what they're getting for free, which reinforces the incentive.</p>
       </div>
       <div class="cs-card">
-        <h3>Circular Dependency Prevention</h3>
-        <p>The gift's price could inflate the cart subtotal above the threshold, keeping itself in the cart. The progress bar excludes the gift from its subtotal calculation entirely - only real purchases count.</p>
+        <h3>Protected from Tampering</h3>
+        <p>Gift quantity is locked to 1. The quantity selector and delete button are hidden via CSS. A hidden <code>_gift</code> line item property marks it for special treatment.</p>
       </div>
       <div class="cs-card">
-        <h3>Native Shopify Discount</h3>
-        <p>Uses Shopify's built-in Buy X Get Y discount type - no apps, no workarounds. The discount applies in the cart AND at checkout. Limited to 1 free gift per order.</p>
+        <h3>Production Enhancement</h3>
+        <p>For production, a Shopify Function (Cart Transform API) or Buy X Get Y discount could apply the discount server-side, making the gift a real $13.99 product discounted to free at checkout.</p>
       </div>
     </div>
   </div>

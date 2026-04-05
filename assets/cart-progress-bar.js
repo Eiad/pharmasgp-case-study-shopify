@@ -156,11 +156,7 @@
       if (!config || !config.giftVariant) { isUpdating = false; return; }
 
       var cart = await getCart();
-      var total = cart.items.reduce(function(sum, item) {
-        var isGift = (item.properties && item.properties._gift === 'true') ||
-                     String(item.variant_id) === String(config.giftVariant);
-        return isGift ? sum : sum + item.final_line_price;
-      }, 0);
+      var total = cart.items_subtotal_price;
       var hasGift = cart.items.some(function(item) {
         return String(item.variant_id) === String(config.giftVariant);
       });
