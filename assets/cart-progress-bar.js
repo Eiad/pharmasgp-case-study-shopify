@@ -7,7 +7,7 @@
   var isUpdating = false;
   var isOwnCartCall = false;
   var missedUpdate = false;
-  var DEBOUNCE_MS = 300;
+  var DEBOUNCE_MS = 800;
 
   function getConfig() {
     var el = document.querySelector(WRAPPER_SEL);
@@ -234,25 +234,45 @@
     hideCartLoading();
   }
 
-  // Consolidate duplicate lines using sequential /cart/change.js calls.
-  // More reliable than /cart/update.js with line item keys.
-  async function consolidateLines(duplicateGroups, giftVariant) {
+  // Consolidate duplicate lines by removing extras one at a time.
+  // Re-fetches cart after each removal to work with fresh line state,
+  // avoiding interference from concurrent theme operations.
+  async function consolidateLines(giftVariant) {
     showCartLoading();
-    for (var vid in duplicateGroups) {
-      var lines = duplicateGroups[vid];
-      if (lines.length <= 1) continue;
+    var maxRetries = 5;
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      var cart = await getCart();
+      var groups = {};
+      cart.items.forEach(function(item) {
+        var vid = String(item.variant_id);
+        if (!groups[vid]) groups[vid] = [];
+        groups[vid].push({ key: item.key, quantity: item.quantity });
+      });
 
-      var isGift = vid === String(giftVariant);
-      var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
-      var targetQty = isGift ? 1 : totalQty;
+      // Find first duplicate group
+      var foundDuplicate = false;
+      for (var vid in groups) {
+        var lines = groups[vid];
+        if (lines.length <= 1) continue;
+        foundDuplicate = true;
 
-      // Set first line to target quantity
-      await cartApiCall('/cart/change.js', { id: lines[0].key, quantity: targetQty });
+        // Remove the LAST duplicate line (safest — keeps the oldest line)
+        var lineToRemove = lines[lines.length - 1];
+        var lineToKeep = lines[0];
+        var isGift = vid === String(giftVariant);
+        var totalQty = isGift ? 1 : lineToKeep.quantity + lineToRemove.quantity;
 
-      // Remove all other lines (reverse order to avoid index issues)
-      for (var i = lines.length - 1; i >= 1; i--) {
-        await cartApiCall('/cart/change.js', { id: lines[i].key, quantity: 0 });
+        console.log('[cart-progress] Consolidating: remove', lineToRemove.key, 'merge qty into', lineToKeep.key, '→', totalQty);
+
+        // First remove the duplicate
+        await cartApiCall('/cart/change.js', { id: lineToRemove.key, quantity: 0 });
+        // Then set the kept line to the correct quantity
+        await cartApiCall('/cart/change.js', { id: lineToKeep.key, quantity: totalQty });
+
+        break; // Only handle one duplicate per iteration, then re-fetch
       }
+
+      if (!foundDuplicate) break;
     }
     await triggerSectionRefresh();
     showCartLoading();
@@ -276,13 +296,10 @@
 
       // --- CONSOLIDATION: merge ALL duplicate variant lines ---
       console.log('[cart-progress] update() running. Items:', cart.items.length, 'Total:', total, 'HasGift:', hasGift);
-      console.log('[cart-progress] Cart items:', JSON.stringify(cart.items.map(function(i) { return { vid: i.variant_id, qty: i.quantity, key: i.key, props: i.properties }; })));
       var duplicateGroups = findDuplicateGroups(cart.items);
-      console.log('[cart-progress] Duplicate groups:', duplicateGroups ? JSON.stringify(duplicateGroups) : 'none');
       if (duplicateGroups) {
-        console.log('[cart-progress] Starting consolidation...');
-        await consolidateLines(duplicateGroups, config.giftVariant);
-        console.log('[cart-progress] Consolidation done.');
+        console.log('[cart-progress] Duplicates found, consolidating...');
+        await consolidateLines(config.giftVariant);
         config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
