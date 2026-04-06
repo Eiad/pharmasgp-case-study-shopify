@@ -7,7 +7,7 @@
   var isUpdating = false;
   var isOwnCartCall = false;
   var missedUpdate = false;
-  var DEBOUNCE_MS = 800;
+  var DEBOUNCE_MS = 300;
 
   function getConfig() {
     var el = document.querySelector(WRAPPER_SEL);
@@ -26,20 +26,12 @@
   }
 
   // Calculate cart subtotal EXCLUDING the gift item to prevent circular dependency.
-  // DISABLED: old $0-gift approach used cart.items_subtotal_price directly (no exclusion needed
-  // since the gift was $0). Kept here in case we need to revert from BXGY back to $0-gift:
-  //   var total = cart.items_subtotal_price;
   function calcSubtotal(items, giftVariant) {
     return items.reduce(function(sum, item) {
       var isGift = (item.properties && item.properties._gift === 'true') ||
                    String(item.variant_id) === String(giftVariant);
       return isGift ? sum : sum + item.final_line_price;
     }, 0);
-  }
-
-  function serializeProps(props) {
-    if (!props || typeof props !== 'object') return '{}';
-    return JSON.stringify(props);
   }
 
   async function getCart() {
@@ -78,10 +70,6 @@
     }
   }
 
-  // Trigger the theme to re-render cart sections using its own Section Rendering API.
-  // Unlike the old refreshDrawer(), this sends a /cart/update.js with sections param,
-  // which returns section HTML that the theme's morph system can process.
-  // This avoids raw DOM replacement that caused button re-enabling and line splitting.
   async function triggerSectionRefresh() {
     try {
       var comps = document.querySelectorAll('cart-items-component');
@@ -89,11 +77,9 @@
       comps.forEach(function(c) { if (c.dataset.sectionId) sectionIds.push(c.dataset.sectionId); });
       if (sectionIds.length === 0) return;
 
-      // Fetch fresh section HTML
       var res = await fetch('/?sections=' + sectionIds.join(','));
       var data = await res.json();
 
-      // Replace section content — but keep the loading overlay active
       comps.forEach(function(comp) {
         var html = data[comp.dataset.sectionId];
         if (!html) return;
@@ -106,9 +92,7 @@
       });
 
       reorderGiftItems();
-    } catch(e) {
-      // Silently fail — the next cart:update event will refresh naturally
-    }
+    } catch(e) {}
   }
 
   function reorderGiftItems() {
@@ -163,126 +147,80 @@
     bar.setAttribute('aria-label', statusText);
   }
 
-  // Find duplicate variant groups. Returns object keyed by variant_id if any
-  // duplicates exist, or null if no consolidation needed.
-  function findDuplicateGroups(items) {
-    var groups = {};
-    items.forEach(function(item) {
-      var vid = String(item.variant_id);
-      if (!groups[vid]) groups[vid] = [];
-      groups[vid].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
-    });
+  // Intercept /cart/add.js and convert to qty increment when variant already in cart.
+  // This prevents Shopify from creating duplicate line items.
+  async function interceptCartAdd(originalFetch, fetchArgs) {
+    var body = fetchArgs[1] && fetchArgs[1].body;
+    var variantId, quantity, sections;
 
-    var hasDuplicates = false;
-    var result = {};
-    Object.keys(groups).forEach(function(vid) {
-      if (groups[vid].length > 1) {
-        hasDuplicates = true;
-        result[vid] = groups[vid];
-      }
-    });
-
-    return hasDuplicates ? result : null;
-  }
-
-  // Build consolidation updates (kept for test compatibility).
-  function buildConsolidationUpdates(items, giftVariant) {
-    var groups = {};
-    items.forEach(function(item) {
-      var vid = String(item.variant_id);
-      if (!groups[vid]) groups[vid] = [];
-      groups[vid].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
-    });
-
-    var updates = {};
-    var needsConsolidation = false;
-
-    Object.keys(groups).forEach(function(vid) {
-      var lines = groups[vid];
-      if (lines.length <= 1) return;
-
-      needsConsolidation = true;
-      var isGift = vid === String(giftVariant);
-      var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
-
-      lines.forEach(function(l, i) {
-        if (i === 0) {
-          updates[l.key] = isGift ? 1 : totalQty;
-        } else {
-          updates[l.key] = 0;
-        }
-      });
-    });
-
-    return needsConsolidation ? updates : null;
-  }
-
-  // Perform a cart modification, refresh the drawer, and wait for stability.
-  // Keeps loading overlay active the entire time to prevent rapid clicks.
-  async function cartModifyAndRefresh(apiUrl, body) {
-    showCartLoading();
-    var res = await cartApiCall(apiUrl, body);
-    if (!res || !res.ok) {
-      hideCartLoading();
-      return;
+    // Parse variant ID and sections from request body (FormData or JSON)
+    if (body instanceof FormData) {
+      variantId = body.get('id');
+      quantity = parseInt(body.get('quantity')) || 1;
+      sections = body.get('sections');
+    } else if (typeof body === 'string') {
+      try {
+        var parsed = JSON.parse(body);
+        variantId = String(parsed.id || (parsed.items && parsed.items[0] && parsed.items[0].id) || '');
+        quantity = parsed.quantity || (parsed.items && parsed.items[0] && parsed.items[0].quantity) || 1;
+        sections = parsed.sections;
+      } catch(e) {}
     }
-    await triggerSectionRefresh();
-    // Re-apply loading overlay (triggerSectionRefresh replaced DOM, overlay class was on parent)
-    showCartLoading();
-    // Wait for any in-flight theme operations to settle
-    await new Promise(function(r) { setTimeout(r, 500); });
-    hideCartLoading();
-  }
 
-  // Consolidate duplicate lines by removing extras one at a time.
-  // Re-fetches cart after each removal to work with fresh line state,
-  // avoiding interference from concurrent theme operations.
-  async function consolidateLines(giftVariant) {
-    showCartLoading();
-    var maxRetries = 5;
-    for (var attempt = 0; attempt < maxRetries; attempt++) {
+    if (!variantId) {
+      // Can't parse — let original through
+      return originalFetch.apply(window, fetchArgs).then(function(r) { scheduleUpdate(); return r; });
+    }
+
+    // Check if this variant already exists in the cart
+    try {
       var cart = await getCart();
-      var groups = {};
-      cart.items.forEach(function(item) {
-        var vid = String(item.variant_id);
-        if (!groups[vid]) groups[vid] = [];
-        groups[vid].push({ key: item.key, quantity: item.quantity });
-      });
-
-      // Find first duplicate group
-      var foundDuplicate = false;
-      for (var vid in groups) {
-        var lines = groups[vid];
-        if (lines.length <= 1) continue;
-        foundDuplicate = true;
-
-        // Remove the LAST duplicate line (safest — keeps the oldest line)
-        var lineToRemove = lines[lines.length - 1];
-        var lineToKeep = lines[0];
-        var isGift = vid === String(giftVariant);
-        var totalQty = isGift ? 1 : lineToKeep.quantity + lineToRemove.quantity;
-
-        console.log('[cart-progress] Consolidating: remove', lineToRemove.key, 'merge qty into', lineToKeep.key, '→', totalQty);
-
-        // First remove the duplicate
-        await cartApiCall('/cart/change.js', { id: lineToRemove.key, quantity: 0 });
-        // Then set the kept line to the correct quantity
-        await cartApiCall('/cart/change.js', { id: lineToKeep.key, quantity: totalQty });
-
-        break; // Only handle one duplicate per iteration, then re-fetch
+      var existingLine = null;
+      for (var i = 0; i < cart.items.length; i++) {
+        var item = cart.items[i];
+        if (String(item.variant_id) === String(variantId) &&
+            !(item.properties && item.properties._gift === 'true')) {
+          existingLine = item;
+          break;
+        }
       }
 
-      if (!foundDuplicate) break;
+      if (!existingLine) {
+        // Not in cart — let original /cart/add.js through
+        console.log('[cart-progress] Add interceptor: variant not in cart, passing through');
+        return originalFetch.apply(window, fetchArgs).then(function(r) { scheduleUpdate(); return r; });
+      }
+
+      // Variant exists! Convert to /cart/change.js (qty increment)
+      var newQty = existingLine.quantity + quantity;
+      console.log('[cart-progress] Add interceptor: variant exists (qty ' + existingLine.quantity + '), converting to change.js (qty ' + newQty + ')');
+
+      var changeBody = {
+        id: existingLine.key,
+        quantity: newQty
+      };
+      if (sections) changeBody.sections = sections;
+
+      isOwnCartCall = true;
+      var response = await originalFetch('/cart/change.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changeBody)
+      });
+      isOwnCartCall = false;
+
+      scheduleUpdate();
+      return response;
+    } catch(e) {
+      // On error, fall through to original request
+      console.error('[cart-progress] Add interceptor error:', e);
+      isOwnCartCall = false;
+      return originalFetch.apply(window, fetchArgs).then(function(r) { scheduleUpdate(); return r; });
     }
-    // Reload page to show merged state — theme's own morph would overwrite
-    // our section refresh with stale pre-consolidation data
-    console.log('[cart-progress] Consolidation complete, reloading page');
-    window.location.reload();
   }
 
   async function update() {
-    if (isUpdating) { console.log('[cart-progress] update: SKIPPED (isUpdating)'); return; }
-    console.log('[cart-progress] update: STARTING');
+    if (isUpdating) { return; }
     isUpdating = true;
     try {
       var config = getConfig();
@@ -294,25 +232,20 @@
         return String(item.variant_id) === String(config.giftVariant);
       });
 
-      // --- CONSOLIDATION: merge ALL duplicate variant lines ---
-      console.log('[cart-progress] update() running. Items:', cart.items.length, 'Total:', total, 'HasGift:', hasGift);
-      var duplicateGroups = findDuplicateGroups(cart.items);
-      if (duplicateGroups) {
-        console.log('[cart-progress] Duplicates found, consolidating...');
-        await consolidateLines(config.giftVariant);
-        config = getConfig();
-        cart = await getCart();
-        total = calcSubtotal(cart.items, config.giftVariant);
-        hasGift = cart.items.some(function(item) {
-          return String(item.variant_id) === String(config.giftVariant);
-        });
-      }
-
       // --- ADD GIFT ---
       if (total >= config.gift && !hasGift) {
-        await cartModifyAndRefresh('/cart/add.js', {
+        showCartLoading();
+        var res = await cartApiCall('/cart/add.js', {
           items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }]
         });
+        if (res && res.ok) {
+          await triggerSectionRefresh();
+          showCartLoading();
+          await new Promise(function(r) { setTimeout(r, 500); });
+          hideCartLoading();
+        } else {
+          hideCartLoading();
+        }
         config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
@@ -327,7 +260,12 @@
           return String(item.variant_id) === String(config.giftVariant);
         });
         if (giftItem) {
-          await cartModifyAndRefresh('/cart/change.js', { id: giftItem.key, quantity: 0 });
+          showCartLoading();
+          await cartApiCall('/cart/change.js', { id: giftItem.key, quantity: 0 });
+          await triggerSectionRefresh();
+          showCartLoading();
+          await new Promise(function(r) { setTimeout(r, 500); });
+          hideCartLoading();
           config = getConfig();
           cart = await getCart();
           total = calcSubtotal(cart.items, config.giftVariant);
@@ -354,20 +292,24 @@
 
   function scheduleUpdate() {
     if (isUpdating) {
-      console.log('[cart-progress] scheduleUpdate: BLOCKED (isUpdating), setting missedUpdate');
       missedUpdate = true;
       return;
     }
-    console.log('[cart-progress] scheduleUpdate: setting timer for', DEBOUNCE_MS, 'ms');
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(update, DEBOUNCE_MS);
   }
 
-  // Intercept fetch to detect cart changes from any source
+  // Intercept fetch: convert /cart/add.js to qty increment when variant exists
   var originalFetch = window.fetch;
   window.fetch = function() {
     var args = arguments;
     var url = typeof args[0] === 'string' ? args[0] : '';
+
+    // Intercept /cart/add.js to prevent duplicate line items
+    if (!isOwnCartCall && url.indexOf('/cart/add.js') !== -1) {
+      return interceptCartAdd(originalFetch, args);
+    }
+
     return originalFetch.apply(this, args).then(function(response) {
       if (!isOwnCartCall && url.indexOf('/cart/') !== -1 && url.indexOf('/cart.json') === -1) {
         scheduleUpdate();
