@@ -6,6 +6,7 @@
   var debounceTimer;
   var isUpdating = false;
   var isOwnCartCall = false;
+  var missedUpdate = false;
   var DEBOUNCE_MS = 300;
   var OVERLAY_COOLDOWN_MS = 500;
   var REFRESH_DELAY_MS = 100;
@@ -274,10 +275,18 @@
       console.error('Cart progress bar:', e);
     } finally {
       isUpdating = false;
+      if (missedUpdate) {
+        missedUpdate = false;
+        scheduleUpdate();
+      }
     }
   }
 
   function scheduleUpdate() {
+    if (isUpdating) {
+      missedUpdate = true;
+      return;
+    }
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(update, DEBOUNCE_MS);
   }
