@@ -8,8 +8,6 @@
   var isOwnCartCall = false;
   var missedUpdate = false;
   var DEBOUNCE_MS = 300;
-  var OVERLAY_COOLDOWN_MS = 500;
-  var REFRESH_DELAY_MS = 100;
 
   function getConfig() {
     var el = document.querySelector(WRAPPER_SEL);
@@ -80,18 +78,22 @@
     }
   }
 
-  async function refreshDrawer() {
+  // Trigger the theme to re-render cart sections using its own Section Rendering API.
+  // Unlike the old refreshDrawer(), this sends a /cart/update.js with sections param,
+  // which returns section HTML that the theme's morph system can process.
+  // This avoids raw DOM replacement that caused button re-enabling and line splitting.
+  async function triggerSectionRefresh() {
     try {
       var comps = document.querySelectorAll('cart-items-component');
       var sectionIds = [];
       comps.forEach(function(c) { if (c.dataset.sectionId) sectionIds.push(c.dataset.sectionId); });
       if (sectionIds.length === 0) return;
 
-      await new Promise(function(r) { setTimeout(r, REFRESH_DELAY_MS); });
-
+      // Fetch fresh section HTML
       var res = await fetch('/?sections=' + sectionIds.join(','));
       var data = await res.json();
 
+      // Replace section content — but keep the loading overlay active
       comps.forEach(function(comp) {
         var html = data[comp.dataset.sectionId];
         if (!html) return;
@@ -105,17 +107,8 @@
 
       reorderGiftItems();
     } catch(e) {
-      window.location.reload();
+      // Silently fail — the next cart:update event will refresh naturally
     }
-  }
-
-  // After refreshDrawer replaces DOM, keep overlay active to block rapid clicks
-  // on the newly-enabled buttons, then re-fetch config from fresh DOM
-  async function refreshAndCooldown() {
-    await refreshDrawer();
-    await new Promise(function(r) { setTimeout(r, OVERLAY_COOLDOWN_MS); });
-    hideCartLoading();
-    return getConfig();
   }
 
   function reorderGiftItems() {
@@ -170,9 +163,8 @@
     bar.setAttribute('aria-label', statusText);
   }
 
-  // Build consolidation updates for ALL duplicate variant lines (not just gift).
-  // Groups by variant_id + serialized properties. Sums quantities for non-gift,
-  // forces qty 1 for gift variant.
+  // Build consolidation updates for ALL duplicate variant lines.
+  // Groups by variant_id + serialized properties.
   function buildConsolidationUpdates(items, giftVariant) {
     var groups = {};
     items.forEach(function(item) {
@@ -204,6 +196,19 @@
     return needsConsolidation ? updates : null;
   }
 
+  // Perform a cart modification, refresh the drawer, and wait for stability.
+  // Keeps loading overlay active the entire time to prevent rapid clicks.
+  async function cartModifyAndRefresh(apiUrl, body) {
+    showCartLoading();
+    await cartApiCall(apiUrl, body);
+    await triggerSectionRefresh();
+    // Re-apply loading overlay (triggerSectionRefresh replaced DOM, overlay class was on parent)
+    showCartLoading();
+    // Wait for any in-flight theme operations to settle
+    await new Promise(function(r) { setTimeout(r, 500); });
+    hideCartLoading();
+  }
+
   async function update() {
     if (isUpdating) return;
     isUpdating = true;
@@ -220,9 +225,8 @@
       // --- CONSOLIDATION: merge ALL duplicate variant lines ---
       var consolidationUpdates = buildConsolidationUpdates(cart.items, config.giftVariant);
       if (consolidationUpdates) {
-        showCartLoading();
-        await cartApiCall('/cart/update.js', { updates: consolidationUpdates });
-        config = await refreshAndCooldown();
+        await cartModifyAndRefresh('/cart/update.js', { updates: consolidationUpdates });
+        config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
         hasGift = cart.items.some(function(item) {
@@ -230,17 +234,12 @@
         });
       }
 
-      // --- ADD GIFT: when subtotal (excluding gift) crosses threshold ---
+      // --- ADD GIFT ---
       if (total >= config.gift && !hasGift) {
-        showCartLoading();
-        var res = await cartApiCall('/cart/add.js', {
+        await cartModifyAndRefresh('/cart/add.js', {
           items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }]
         });
-        if (res && res.ok) {
-          config = await refreshAndCooldown();
-        } else {
-          hideCartLoading();
-        }
+        config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
         updateUI(config, total);
@@ -248,17 +247,16 @@
         return;
       }
 
-      // --- REMOVE GIFT: when subtotal drops below threshold ---
+      // --- REMOVE GIFT ---
       if (total < config.gift && hasGift) {
         var giftItem = cart.items.find(function(item) {
           return String(item.variant_id) === String(config.giftVariant);
         });
         if (giftItem) {
-          showCartLoading();
           var removeUpdates = {};
           removeUpdates[giftItem.key] = 0;
-          await cartApiCall('/cart/update.js', { updates: removeUpdates });
-          config = await refreshAndCooldown();
+          await cartModifyAndRefresh('/cart/update.js', { updates: removeUpdates });
+          config = getConfig();
           cart = await getCart();
           total = calcSubtotal(cart.items, config.giftVariant);
           updateUI(config, total);
