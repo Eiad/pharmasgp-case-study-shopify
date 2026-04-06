@@ -33,24 +33,24 @@ function serializeProps(props) {
   return JSON.stringify(props);
 }
 
-// Broader consolidation: ALL duplicate variant lines, not just gift
+// Broader consolidation: ALL duplicate variant lines, grouped by variant_id only
 function buildConsolidationUpdates(items, giftVariant) {
   var groups = {};
   items.forEach(function(item) {
-    var key = String(item.variant_id) + ':' + serializeProps(item.properties);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
+    var vid = String(item.variant_id);
+    if (!groups[vid]) groups[vid] = [];
+    groups[vid].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
   });
 
   var updates = {};
   var needsConsolidation = false;
 
-  Object.keys(groups).forEach(function(groupKey) {
-    var lines = groups[groupKey];
+  Object.keys(groups).forEach(function(vid) {
+    var lines = groups[vid];
     if (lines.length <= 1) return;
 
     needsConsolidation = true;
-    var isGift = String(lines[0].variant_id) === String(giftVariant);
+    var isGift = vid === String(giftVariant);
     var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
 
     lines.forEach(function(l, i) {
@@ -648,13 +648,15 @@ describe('7. Broader Consolidation — All Variants', function() {
     assertEqual(totalAfter, 20993, 'After: still $209.93');
   });
 
-  test('does NOT consolidate lines with different properties', function() {
+  test('consolidates lines even with different properties (groups by variant_id only)', function() {
     const items = [
       { variant_id: '11111', quantity: 2, key: 'k53_normal', properties: {} },
       { variant_id: '11111', quantity: 1, key: 'k53_custom', properties: { engraving: 'hello' } }
     ];
     const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
-    assertEqual(updates, null, 'Different properties — no consolidation');
+    assert(updates !== null, 'Same variant_id — should consolidate');
+    assertEqual(updates['k53_normal'], 3, 'First line gets summed qty');
+    assertEqual(updates['k53_custom'], 0, 'Second line removed');
   });
 
   test('consolidates mixed splits: K53 + gift in one atomic update', function() {
@@ -689,37 +691,39 @@ describe('7. Broader Consolidation — All Variants', function() {
   });
 });
 
-describe('8. Properties Serialization', function() {
+describe('8. Variant-ID-Only Grouping', function() {
 
-  test('serializeProps handles normal object', function() {
-    assertEqual(serializeProps({ _gift: 'true' }), '{"_gift":"true"}');
-  });
-
-  test('serializeProps handles empty object', function() {
-    assertEqual(serializeProps({}), '{}');
-  });
-
-  test('serializeProps handles null/undefined', function() {
-    assertEqual(serializeProps(null), '{}');
-    assertEqual(serializeProps(undefined), '{}');
-  });
-
-  test('same properties group together', function() {
-    const items = [
-      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g1', properties: { _gift: 'true' } },
-      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g2', properties: { _gift: 'true' } }
-    ];
-    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
-    assert(updates !== null, 'Same props — should consolidate');
-  });
-
-  test('different properties do NOT group together', function() {
+  test('same variant_id groups together regardless of properties', function() {
     const items = [
       { variant_id: GIFT_VARIANT, quantity: 1, key: 'g1', properties: { _gift: 'true' } },
       { variant_id: GIFT_VARIANT, quantity: 1, key: 'g2', properties: {} }
     ];
     const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
-    assertEqual(updates, null, 'Different props — no consolidation');
+    assert(updates !== null, 'Same variant_id — should consolidate');
+    assertEqual(updates['g1'], 1, 'Gift forced to qty 1');
+    assertEqual(updates['g2'], 0, 'Second line removed');
+  });
+
+  test('different variant_ids do NOT group together', function() {
+    const items = [
+      { variant_id: '11111', quantity: 2, key: 'a', properties: {} },
+      { variant_id: '22222', quantity: 1, key: 'b', properties: {} }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assertEqual(updates, null, 'Different variant_ids — no consolidation');
+  });
+
+  test('add-to-cart duplicate: new line merged with existing', function() {
+    const items = [
+      { variant_id: '11111', quantity: 4, key: 'existing', properties: {} },
+      { variant_id: '11111', quantity: 1, key: 'new_add', properties: {} },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift', properties: { _gift: 'true' } }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assert(updates !== null, 'K53 duplicated — should consolidate');
+    assertEqual(updates['existing'], 5, 'Merged to qty 5');
+    assertEqual(updates['new_add'], 0, 'New add line removed');
+    assert(!('gift' in updates), 'Gift untouched (single line)');
   });
 });
 

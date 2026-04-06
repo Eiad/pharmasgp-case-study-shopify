@@ -164,24 +164,24 @@
   }
 
   // Build consolidation updates for ALL duplicate variant lines.
-  // Groups by variant_id + serialized properties.
+  // Groups by variant_id only — merges any split lines regardless of properties.
   function buildConsolidationUpdates(items, giftVariant) {
     var groups = {};
     items.forEach(function(item) {
-      var key = String(item.variant_id) + ':' + serializeProps(item.properties);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
+      var vid = String(item.variant_id);
+      if (!groups[vid]) groups[vid] = [];
+      groups[vid].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
     });
 
     var updates = {};
     var needsConsolidation = false;
 
-    Object.keys(groups).forEach(function(groupKey) {
-      var lines = groups[groupKey];
+    Object.keys(groups).forEach(function(vid) {
+      var lines = groups[vid];
       if (lines.length <= 1) return;
 
       needsConsolidation = true;
-      var isGift = String(lines[0].variant_id) === String(giftVariant);
+      var isGift = vid === String(giftVariant);
       var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
 
       lines.forEach(function(l, i) {
