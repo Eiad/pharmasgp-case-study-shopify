@@ -274,10 +274,10 @@
 
       if (!foundDuplicate) break;
     }
-    await triggerSectionRefresh();
-    showCartLoading();
-    await new Promise(function(r) { setTimeout(r, 500); });
-    hideCartLoading();
+    // Reload page to show merged state — theme's own morph would overwrite
+    // our section refresh with stale pre-consolidation data
+    console.log('[cart-progress] Consolidation complete, reloading page');
+    window.location.reload();
   }
 
   async function update() {
