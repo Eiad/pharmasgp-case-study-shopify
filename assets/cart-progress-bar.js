@@ -261,7 +261,8 @@
   }
 
   async function update() {
-    if (isUpdating) return;
+    if (isUpdating) { console.log('[cart-progress] update: SKIPPED (isUpdating)'); return; }
+    console.log('[cart-progress] update: STARTING');
     isUpdating = true;
     try {
       var config = getConfig();
@@ -274,9 +275,14 @@
       });
 
       // --- CONSOLIDATION: merge ALL duplicate variant lines ---
+      console.log('[cart-progress] update() running. Items:', cart.items.length, 'Total:', total, 'HasGift:', hasGift);
+      console.log('[cart-progress] Cart items:', JSON.stringify(cart.items.map(function(i) { return { vid: i.variant_id, qty: i.quantity, key: i.key, props: i.properties }; })));
       var duplicateGroups = findDuplicateGroups(cart.items);
+      console.log('[cart-progress] Duplicate groups:', duplicateGroups ? JSON.stringify(duplicateGroups) : 'none');
       if (duplicateGroups) {
+        console.log('[cart-progress] Starting consolidation...');
         await consolidateLines(duplicateGroups, config.giftVariant);
+        console.log('[cart-progress] Consolidation done.');
         config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
@@ -331,9 +337,11 @@
 
   function scheduleUpdate() {
     if (isUpdating) {
+      console.log('[cart-progress] scheduleUpdate: BLOCKED (isUpdating), setting missedUpdate');
       missedUpdate = true;
       return;
     }
+    console.log('[cart-progress] scheduleUpdate: setting timer for', DEBOUNCE_MS, 'ms');
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(update, DEBOUNCE_MS);
   }
