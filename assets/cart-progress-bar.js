@@ -23,18 +23,22 @@
     return symbol + (cents / 100).toFixed(2);
   }
 
+  // Calculate cart subtotal EXCLUDING the gift item to prevent circular dependency.
+  // DISABLED: old $0-gift approach used cart.items_subtotal_price directly (no exclusion needed
+  // since the gift was $0). Kept here in case we need to revert from BXGY back to $0-gift:
+  //   var total = cart.items_subtotal_price;
+  function calcSubtotal(items, giftVariant) {
+    return items.reduce(function(sum, item) {
+      var isGift = (item.properties && item.properties._gift === 'true') ||
+                   String(item.variant_id) === String(giftVariant);
+      return isGift ? sum : sum + item.final_line_price;
+    }, 0);
+  }
+
   async function getCart() {
     var res = await fetch('/cart.json');
     if (!res.ok) throw new Error('Cart fetch failed');
     return res.json();
-  }
-
-  function getCartSectionIds() {
-    var ids = [];
-    document.querySelectorAll('cart-items-component').forEach(function(c) {
-      if (c.dataset.sectionId) ids.push(c.dataset.sectionId);
-    });
-    return ids;
   }
 
   function showCartLoading() {
@@ -153,53 +157,79 @@
     isUpdating = true;
     try {
       var config = getConfig();
-      if (!config || !config.giftVariant) { isUpdating = false; return; }
+      if (!config || !config.giftVariant) return;
 
       var cart = await getCart();
-      var total = cart.items_subtotal_price;
+      var total = calcSubtotal(cart.items, config.giftVariant);
       var hasGift = cart.items.some(function(item) {
         return String(item.variant_id) === String(config.giftVariant);
       });
 
-      var cartChanged = false;
+      // --- CONSOLIDATION: fix duplicate gift lines from rapid-click race conditions ---
+      var giftLines = [];
+      cart.items.forEach(function(item) {
+        if (String(item.variant_id) === String(config.giftVariant)) {
+          giftLines.push({ key: item.key, quantity: item.quantity });
+        }
+      });
 
-      if (total >= config.gift && !hasGift) {
+      if (giftLines.length > 1 || (giftLines.length === 1 && giftLines[0].quantity > 1)) {
         showCartLoading();
-        var res = await cartApiCall('/cart/add.js', { items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }] });
-        if (res && res.ok) await refreshDrawer();
+        var updates = {};
+        giftLines.forEach(function(g, i) {
+          updates[g.key] = (i === 0) ? 1 : 0;
+        });
+        await cartApiCall('/cart/update.js', { updates: updates });
+        await refreshDrawer();
+        config = getConfig();
         hideCartLoading();
-        cartChanged = true;
+        cart = await getCart();
+        total = calcSubtotal(cart.items, config.giftVariant);
+        hasGift = cart.items.some(function(item) {
+          return String(item.variant_id) === String(config.giftVariant);
+        });
       }
 
-      if (!cartChanged && total >= config.gift && hasGift) {
+      // --- ADD GIFT: when subtotal (excluding gift) crosses threshold ---
+      if (total >= config.gift && !hasGift) {
+        showCartLoading();
+        var res = await cartApiCall('/cart/add.js', {
+          items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }]
+        });
+        if (res && res.ok) {
+          await refreshDrawer();
+          config = getConfig();
+        }
+        hideCartLoading();
+        cart = await getCart();
+        total = calcSubtotal(cart.items, config.giftVariant);
+        updateUI(config, total);
+        reorderGiftItems();
+        return;
+      }
+
+      // --- REMOVE GIFT: when subtotal drops below threshold ---
+      if (total < config.gift && hasGift) {
         var giftItem = cart.items.find(function(item) {
           return String(item.variant_id) === String(config.giftVariant);
         });
-        if (giftItem && giftItem.quantity > 1) {
+        if (giftItem) {
           showCartLoading();
-          var giftLine = cart.items.indexOf(giftItem) + 1;
-          await cartApiCall('/cart/change.js', { line: giftLine, quantity: 1 });
+          var removeUpdates = {};
+          removeUpdates[giftItem.key] = 0;
+          await cartApiCall('/cart/update.js', { updates: removeUpdates });
           await refreshDrawer();
+          config = getConfig();
           hideCartLoading();
-          cartChanged = true;
+          cart = await getCart();
+          total = calcSubtotal(cart.items, config.giftVariant);
+          updateUI(config, total);
+          reorderGiftItems();
+          return;
         }
       }
 
-      if (!cartChanged && total < config.gift && hasGift) {
-        var idx = cart.items.findIndex(function(item) {
-          return String(item.variant_id) === String(config.giftVariant);
-        });
-        if (idx !== -1) {
-          showCartLoading();
-          await cartApiCall('/cart/change.js', { line: idx + 1, quantity: 0 });
-          await refreshDrawer();
-          hideCartLoading();
-          cartChanged = true;
-        }
-      }
-
-      if (cartChanged) { isUpdating = false; return; }
-
+      // --- NO CHANGE: just update the progress bar UI ---
       updateUI(config, total);
       reorderGiftItems();
     } catch (e) {
@@ -212,7 +242,7 @@
 
   function scheduleUpdate() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(update, 100);
+    debounceTimer = setTimeout(update, 150);
   }
 
   // Intercept fetch to detect cart changes
