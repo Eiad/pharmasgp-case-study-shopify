@@ -163,8 +163,29 @@
     bar.setAttribute('aria-label', statusText);
   }
 
-  // Build consolidation updates for ALL duplicate variant lines.
-  // Groups by variant_id only — merges any split lines regardless of properties.
+  // Find duplicate variant groups. Returns object keyed by variant_id if any
+  // duplicates exist, or null if no consolidation needed.
+  function findDuplicateGroups(items) {
+    var groups = {};
+    items.forEach(function(item) {
+      var vid = String(item.variant_id);
+      if (!groups[vid]) groups[vid] = [];
+      groups[vid].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
+    });
+
+    var hasDuplicates = false;
+    var result = {};
+    Object.keys(groups).forEach(function(vid) {
+      if (groups[vid].length > 1) {
+        hasDuplicates = true;
+        result[vid] = groups[vid];
+      }
+    });
+
+    return hasDuplicates ? result : null;
+  }
+
+  // Build consolidation updates (kept for test compatibility).
   function buildConsolidationUpdates(items, giftVariant) {
     var groups = {};
     items.forEach(function(item) {
@@ -200,11 +221,41 @@
   // Keeps loading overlay active the entire time to prevent rapid clicks.
   async function cartModifyAndRefresh(apiUrl, body) {
     showCartLoading();
-    await cartApiCall(apiUrl, body);
+    var res = await cartApiCall(apiUrl, body);
+    if (!res || !res.ok) {
+      hideCartLoading();
+      return;
+    }
     await triggerSectionRefresh();
     // Re-apply loading overlay (triggerSectionRefresh replaced DOM, overlay class was on parent)
     showCartLoading();
     // Wait for any in-flight theme operations to settle
+    await new Promise(function(r) { setTimeout(r, 500); });
+    hideCartLoading();
+  }
+
+  // Consolidate duplicate lines using sequential /cart/change.js calls.
+  // More reliable than /cart/update.js with line item keys.
+  async function consolidateLines(duplicateGroups, giftVariant) {
+    showCartLoading();
+    for (var vid in duplicateGroups) {
+      var lines = duplicateGroups[vid];
+      if (lines.length <= 1) continue;
+
+      var isGift = vid === String(giftVariant);
+      var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
+      var targetQty = isGift ? 1 : totalQty;
+
+      // Set first line to target quantity
+      await cartApiCall('/cart/change.js', { id: lines[0].key, quantity: targetQty });
+
+      // Remove all other lines (reverse order to avoid index issues)
+      for (var i = lines.length - 1; i >= 1; i--) {
+        await cartApiCall('/cart/change.js', { id: lines[i].key, quantity: 0 });
+      }
+    }
+    await triggerSectionRefresh();
+    showCartLoading();
     await new Promise(function(r) { setTimeout(r, 500); });
     hideCartLoading();
   }
@@ -223,9 +274,9 @@
       });
 
       // --- CONSOLIDATION: merge ALL duplicate variant lines ---
-      var consolidationUpdates = buildConsolidationUpdates(cart.items, config.giftVariant);
-      if (consolidationUpdates) {
-        await cartModifyAndRefresh('/cart/update.js', { updates: consolidationUpdates });
+      var duplicateGroups = findDuplicateGroups(cart.items);
+      if (duplicateGroups) {
+        await consolidateLines(duplicateGroups, config.giftVariant);
         config = getConfig();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
@@ -253,9 +304,7 @@
           return String(item.variant_id) === String(config.giftVariant);
         });
         if (giftItem) {
-          var removeUpdates = {};
-          removeUpdates[giftItem.key] = 0;
-          await cartModifyAndRefresh('/cart/update.js', { updates: removeUpdates });
+          await cartModifyAndRefresh('/cart/change.js', { id: giftItem.key, quantity: 0 });
           config = getConfig();
           cart = await getCart();
           total = calcSubtotal(cart.items, config.giftVariant);
