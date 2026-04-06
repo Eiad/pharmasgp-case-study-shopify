@@ -6,6 +6,9 @@
   var debounceTimer;
   var isUpdating = false;
   var isOwnCartCall = false;
+  var DEBOUNCE_MS = 300;
+  var OVERLAY_COOLDOWN_MS = 500;
+  var REFRESH_DELAY_MS = 100;
 
   function getConfig() {
     var el = document.querySelector(WRAPPER_SEL);
@@ -33,6 +36,11 @@
                    String(item.variant_id) === String(giftVariant);
       return isGift ? sum : sum + item.final_line_price;
     }, 0);
+  }
+
+  function serializeProps(props) {
+    if (!props || typeof props !== 'object') return '{}';
+    return JSON.stringify(props);
   }
 
   async function getCart() {
@@ -78,7 +86,7 @@
       comps.forEach(function(c) { if (c.dataset.sectionId) sectionIds.push(c.dataset.sectionId); });
       if (sectionIds.length === 0) return;
 
-      await new Promise(function(r) { setTimeout(r, 300); });
+      await new Promise(function(r) { setTimeout(r, REFRESH_DELAY_MS); });
 
       var res = await fetch('/?sections=' + sectionIds.join(','));
       var data = await res.json();
@@ -98,6 +106,15 @@
     } catch(e) {
       window.location.reload();
     }
+  }
+
+  // After refreshDrawer replaces DOM, keep overlay active to block rapid clicks
+  // on the newly-enabled buttons, then re-fetch config from fresh DOM
+  async function refreshAndCooldown() {
+    await refreshDrawer();
+    await new Promise(function(r) { setTimeout(r, OVERLAY_COOLDOWN_MS); });
+    hideCartLoading();
+    return getConfig();
   }
 
   function reorderGiftItems() {
@@ -152,6 +169,40 @@
     bar.setAttribute('aria-label', statusText);
   }
 
+  // Build consolidation updates for ALL duplicate variant lines (not just gift).
+  // Groups by variant_id + serialized properties. Sums quantities for non-gift,
+  // forces qty 1 for gift variant.
+  function buildConsolidationUpdates(items, giftVariant) {
+    var groups = {};
+    items.forEach(function(item) {
+      var key = String(item.variant_id) + ':' + serializeProps(item.properties);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
+    });
+
+    var updates = {};
+    var needsConsolidation = false;
+
+    Object.keys(groups).forEach(function(groupKey) {
+      var lines = groups[groupKey];
+      if (lines.length <= 1) return;
+
+      needsConsolidation = true;
+      var isGift = String(lines[0].variant_id) === String(giftVariant);
+      var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
+
+      lines.forEach(function(l, i) {
+        if (i === 0) {
+          updates[l.key] = isGift ? 1 : totalQty;
+        } else {
+          updates[l.key] = 0;
+        }
+      });
+    });
+
+    return needsConsolidation ? updates : null;
+  }
+
   async function update() {
     if (isUpdating) return;
     isUpdating = true;
@@ -165,24 +216,12 @@
         return String(item.variant_id) === String(config.giftVariant);
       });
 
-      // --- CONSOLIDATION: fix duplicate gift lines from rapid-click race conditions ---
-      var giftLines = [];
-      cart.items.forEach(function(item) {
-        if (String(item.variant_id) === String(config.giftVariant)) {
-          giftLines.push({ key: item.key, quantity: item.quantity });
-        }
-      });
-
-      if (giftLines.length > 1 || (giftLines.length === 1 && giftLines[0].quantity > 1)) {
+      // --- CONSOLIDATION: merge ALL duplicate variant lines ---
+      var consolidationUpdates = buildConsolidationUpdates(cart.items, config.giftVariant);
+      if (consolidationUpdates) {
         showCartLoading();
-        var updates = {};
-        giftLines.forEach(function(g, i) {
-          updates[g.key] = (i === 0) ? 1 : 0;
-        });
-        await cartApiCall('/cart/update.js', { updates: updates });
-        await refreshDrawer();
-        config = getConfig();
-        hideCartLoading();
+        await cartApiCall('/cart/update.js', { updates: consolidationUpdates });
+        config = await refreshAndCooldown();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
         hasGift = cart.items.some(function(item) {
@@ -197,10 +236,10 @@
           items: [{ id: parseInt(config.giftVariant, 10), quantity: 1, properties: { _gift: "true" } }]
         });
         if (res && res.ok) {
-          await refreshDrawer();
-          config = getConfig();
+          config = await refreshAndCooldown();
+        } else {
+          hideCartLoading();
         }
-        hideCartLoading();
         cart = await getCart();
         total = calcSubtotal(cart.items, config.giftVariant);
         updateUI(config, total);
@@ -218,9 +257,7 @@
           var removeUpdates = {};
           removeUpdates[giftItem.key] = 0;
           await cartApiCall('/cart/update.js', { updates: removeUpdates });
-          await refreshDrawer();
-          config = getConfig();
-          hideCartLoading();
+          config = await refreshAndCooldown();
           cart = await getCart();
           total = calcSubtotal(cart.items, config.giftVariant);
           updateUI(config, total);
@@ -242,10 +279,10 @@
 
   function scheduleUpdate() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(update, 150);
+    debounceTimer = setTimeout(update, DEBOUNCE_MS);
   }
 
-  // Intercept fetch to detect cart changes
+  // Intercept fetch to detect cart changes from any source
   var originalFetch = window.fetch;
   window.fetch = function() {
     var args = arguments;

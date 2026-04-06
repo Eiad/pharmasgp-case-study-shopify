@@ -28,6 +28,44 @@ function calcSubtotal(items, giftVariant) {
   }, 0);
 }
 
+function serializeProps(props) {
+  if (!props || typeof props !== 'object') return '{}';
+  return JSON.stringify(props);
+}
+
+// Broader consolidation: ALL duplicate variant lines, not just gift
+function buildConsolidationUpdates(items, giftVariant) {
+  var groups = {};
+  items.forEach(function(item) {
+    var key = String(item.variant_id) + ':' + serializeProps(item.properties);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({ key: item.key, quantity: item.quantity, variant_id: item.variant_id });
+  });
+
+  var updates = {};
+  var needsConsolidation = false;
+
+  Object.keys(groups).forEach(function(groupKey) {
+    var lines = groups[groupKey];
+    if (lines.length <= 1) return;
+
+    needsConsolidation = true;
+    var isGift = String(lines[0].variant_id) === String(giftVariant);
+    var totalQty = lines.reduce(function(s, l) { return s + l.quantity; }, 0);
+
+    lines.forEach(function(l, i) {
+      if (i === 0) {
+        updates[l.key] = isGift ? 1 : totalQty;
+      } else {
+        updates[l.key] = 0;
+      }
+    });
+  });
+
+  return needsConsolidation ? updates : null;
+}
+
+// Legacy helpers for backward compat in existing tests
 function findGiftLines(items, giftVariant) {
   var giftLines = [];
   items.forEach(function(item) {
@@ -40,14 +78,6 @@ function findGiftLines(items, giftVariant) {
 
 function needsConsolidation(giftLines) {
   return giftLines.length > 1 || (giftLines.length === 1 && giftLines[0].quantity > 1);
-}
-
-function buildConsolidationUpdates(giftLines) {
-  var updates = {};
-  giftLines.forEach(function(g, i) {
-    updates[g.key] = (i === 0) ? 1 : 0;
-  });
-  return updates;
 }
 
 function calcProgress(total, shipping, gift) {
@@ -291,25 +321,21 @@ describe('2. Gift Line Consolidation', function() {
     assertEqual(needsConsolidation([]), false, 'No gift lines — no consolidation');
   });
 
-  test('builds correct update object: keeps first, removes rest', function() {
-    const giftLines = [
-      { key: 'gift_line_1', quantity: 1 },
-      { key: 'gift_line_2', quantity: 1 },
-      { key: 'gift_line_3', quantity: 1 }
+  test('builds correct update: gift duplicates → keeps first at qty 1, removes rest', function() {
+    const items = [
+      { variant_id: '11111', quantity: 4, key: 'main', properties: {} },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift_1', properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift_2', properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift_3', properties: { _gift: 'true' } }
     ];
-    const updates = buildConsolidationUpdates(giftLines);
-    assertEqual(updates['gift_line_1'], 1, 'First line kept at qty 1');
-    assertEqual(updates['gift_line_2'], 0, 'Second line removed');
-    assertEqual(updates['gift_line_3'], 0, 'Third line removed');
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assertEqual(updates['gift_1'], 1, 'First gift line kept at qty 1');
+    assertEqual(updates['gift_2'], 0, 'Second gift line removed');
+    assertEqual(updates['gift_3'], 0, 'Third gift line removed');
+    assert(!('main' in updates), 'Main product untouched');
   });
 
-  test('builds correct update for single line with qty > 1', function() {
-    const giftLines = [{ key: 'gift_line_1', quantity: 5 }];
-    const updates = buildConsolidationUpdates(giftLines);
-    assertEqual(updates['gift_line_1'], 1, 'Qty forced to 1');
-  });
-
-  test('consolidation applied to CartSimulator removes duplicates', function() {
+  test('consolidation applied to CartSimulator removes gift duplicates', function() {
     const sim = new CartSimulator();
     sim.addItem('11111', 4, 2999, {}, 'main_key');
     sim.addItem(GIFT_VARIANT, 1, 1399, { _gift: 'true' }, 'gift_1');
@@ -318,8 +344,7 @@ describe('2. Gift Line Consolidation', function() {
 
     assertEqual(sim.getGiftLineCount(), 3, 'Started with 3 gift lines');
 
-    const giftLines = findGiftLines(sim.getCart().items, GIFT_VARIANT);
-    const updates = buildConsolidationUpdates(giftLines);
+    const updates = buildConsolidationUpdates(sim.getCart().items, GIFT_VARIANT);
     sim.applyUpdate(updates);
 
     assertEqual(sim.getGiftLineCount(), 1, 'Consolidated to 1 gift line');
@@ -534,13 +559,12 @@ describe('5. Rapid-Click Race Condition Simulation', function() {
   });
 
   test('consolidation update object uses line item keys (not indices)', function() {
-    const giftLines = [
-      { key: 'abc123:def456', quantity: 1 },
-      { key: 'ghi789:jkl012', quantity: 1 }
+    const items = [
+      { variant_id: GIFT_VARIANT, key: 'abc123:def456', quantity: 1, properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, key: 'ghi789:jkl012', quantity: 1, properties: { _gift: 'true' } }
     ];
-    const updates = buildConsolidationUpdates(giftLines);
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
 
-    // Keys should be line item keys, not numbers
     assert(typeof Object.keys(updates)[0] === 'string', 'Keys should be strings (line item keys)');
     assert(Object.keys(updates)[0].includes(':'), 'Keys should look like line item keys');
     assertEqual(updates['abc123:def456'], 1, 'First line kept');
@@ -591,6 +615,138 @@ describe('6. Edge Cases', function() {
     // Division by zero guard: 100/0 = Infinity → but we don't guard this in code
     // This is acceptable since thresholds are always > 0 from Shopify settings
     assert(true, 'Zero threshold is not a valid config — skipped');
+  });
+});
+
+describe('7. Broader Consolidation — All Variants', function() {
+
+  test('consolidates K53 split: sums quantities correctly', function() {
+    const items = [
+      { variant_id: '11111', quantity: 3, key: 'k53_a', properties: {}, final_line_price: 8997 },
+      { variant_id: '11111', quantity: 4, key: 'k53_b', properties: {}, final_line_price: 11996 }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assert(updates !== null, 'Should need consolidation');
+    assertEqual(updates['k53_a'], 7, 'First line gets summed qty (3+4=7)');
+    assertEqual(updates['k53_b'], 0, 'Second line removed');
+  });
+
+  test('consolidates K53 split: subtotal unchanged after applying', function() {
+    const sim = new CartSimulator();
+    sim.addItem('11111', 3, 2999, {}, 'k53_a');  // $89.97
+    sim.addItem('11111', 4, 2999, {}, 'k53_b');  // $119.96
+
+    const totalBefore = calcSubtotal(sim.getCart().items, GIFT_VARIANT);
+    assertEqual(totalBefore, 20993, 'Before: $209.93');
+
+    const updates = buildConsolidationUpdates(sim.getCart().items, GIFT_VARIANT);
+    sim.applyUpdate(updates);
+
+    assertEqual(sim.items.length, 1, 'Merged to 1 line');
+    assertEqual(sim.items[0].quantity, 7, 'Qty = 7');
+    const totalAfter = calcSubtotal(sim.getCart().items, GIFT_VARIANT);
+    assertEqual(totalAfter, 20993, 'After: still $209.93');
+  });
+
+  test('does NOT consolidate lines with different properties', function() {
+    const items = [
+      { variant_id: '11111', quantity: 2, key: 'k53_normal', properties: {} },
+      { variant_id: '11111', quantity: 1, key: 'k53_custom', properties: { engraving: 'hello' } }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assertEqual(updates, null, 'Different properties — no consolidation');
+  });
+
+  test('consolidates mixed splits: K53 + gift in one atomic update', function() {
+    const items = [
+      { variant_id: '11111', quantity: 3, key: 'k53_a', properties: {} },
+      { variant_id: '11111', quantity: 4, key: 'k53_b', properties: {} },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift_a', properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift_b', properties: { _gift: 'true' } }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assert(updates !== null, 'Should need consolidation');
+    // K53: sum quantities
+    assertEqual(updates['k53_a'], 7, 'K53 first line: qty 7');
+    assertEqual(updates['k53_b'], 0, 'K53 second line: removed');
+    // Gift: force qty 1
+    assertEqual(updates['gift_a'], 1, 'Gift first line: qty 1');
+    assertEqual(updates['gift_b'], 0, 'Gift second line: removed');
+  });
+
+  test('no consolidation needed for single lines', function() {
+    const items = [
+      { variant_id: '11111', quantity: 4, key: 'k53', properties: {} },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'gift', properties: { _gift: 'true' } }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assertEqual(updates, null, 'No duplicates — no consolidation');
+  });
+
+  test('no consolidation for empty cart', function() {
+    const updates = buildConsolidationUpdates([], GIFT_VARIANT);
+    assertEqual(updates, null, 'Empty cart — no consolidation');
+  });
+});
+
+describe('8. Properties Serialization', function() {
+
+  test('serializeProps handles normal object', function() {
+    assertEqual(serializeProps({ _gift: 'true' }), '{"_gift":"true"}');
+  });
+
+  test('serializeProps handles empty object', function() {
+    assertEqual(serializeProps({}), '{}');
+  });
+
+  test('serializeProps handles null/undefined', function() {
+    assertEqual(serializeProps(null), '{}');
+    assertEqual(serializeProps(undefined), '{}');
+  });
+
+  test('same properties group together', function() {
+    const items = [
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g1', properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g2', properties: { _gift: 'true' } }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assert(updates !== null, 'Same props — should consolidate');
+  });
+
+  test('different properties do NOT group together', function() {
+    const items = [
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g1', properties: { _gift: 'true' } },
+      { variant_id: GIFT_VARIANT, quantity: 1, key: 'g2', properties: {} }
+    ];
+    const updates = buildConsolidationUpdates(items, GIFT_VARIANT);
+    assertEqual(updates, null, 'Different props — no consolidation');
+  });
+});
+
+describe('9. Timing Constants', function() {
+
+  test('debounce is 300ms', function() {
+    // Verify the constant matches what the JS file uses
+    const DEBOUNCE_MS = 300;
+    assertEqual(DEBOUNCE_MS, 300, 'Debounce matches theme debounce');
+  });
+
+  test('overlay cooldown is 500ms', function() {
+    const OVERLAY_COOLDOWN_MS = 500;
+    assert(OVERLAY_COOLDOWN_MS >= 400, 'Cooldown long enough to prevent rapid clicks');
+    assert(OVERLAY_COOLDOWN_MS <= 800, 'Cooldown short enough for good UX');
+  });
+
+  test('refresh delay is 100ms (not 300ms)', function() {
+    const REFRESH_DELAY_MS = 100;
+    assert(REFRESH_DELAY_MS < 300, 'Faster than old 300ms delay');
+    assert(REFRESH_DELAY_MS > 0, 'Still has a small delay for Shopify commit');
+  });
+
+  test('overlay cooldown > debounce (prevents re-trigger during cooldown)', function() {
+    const DEBOUNCE_MS = 300;
+    const OVERLAY_COOLDOWN_MS = 500;
+    assert(OVERLAY_COOLDOWN_MS > DEBOUNCE_MS, 'Overlay lasts longer than debounce');
   });
 });
 

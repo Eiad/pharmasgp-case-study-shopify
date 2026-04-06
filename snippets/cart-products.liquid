@@ -434,9 +434,13 @@
     display: none;
   }
 
-  /* Hide the duplicate unit price row - line total at top-right is enough */
-  .cart-items__table-row--gift .cart-items__unit-price-wrapper {
-    display: none;
+  /* Gift unit price: show strikethrough original with green discounted price */
+  .cart-items__table-row--gift .cart-items__unit-price-wrapper .compare-at-price {
+    color: #6b6d70;
+  }
+  .cart-items__table-row--gift .cart-items__unit-price-wrapper span:not(.visually-hidden):not(.compare-at-price) {
+    color: #4A9500;
+    font-weight: 600;
   }
 
   /* Green price for gift */
